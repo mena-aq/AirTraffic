@@ -11,6 +11,13 @@
 
 //global constants(enums)
 typedef enum{
+    PIA,
+    AirBlue,
+    FedEx,
+    Pakistan Airforce,
+} Airline;
+
+typedef enum{
     COMMERCIAL,
     CARGO,
     MILITARY,
