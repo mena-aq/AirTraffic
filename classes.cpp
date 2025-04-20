@@ -1,18 +1,9 @@
 #include <iostream>
-#include <string>
-#include <vector>
 #include <pthread.h>
 #include <unistd.h>
 #include <semaphore.h>
-#include <memory>
-#include <iostream>
-#include <time.h>
-#include <srand>
-#include <ctime>
-#include <chrono>
-#include <ctime>
-
-using namespace std;
+#include <string>
+#include <vector>
 
 #define AVN_ACTIVE 1
 
@@ -46,7 +37,7 @@ enum class FlightPhase {
 // STRUCTS/CLASSES
 class Airline {
 public:
-    string name;
+    std::string name;
     AirlineType type;
     int numAircraft;
     int numFlights;
@@ -73,21 +64,18 @@ public:
 
         this->entryTime=0; //when allocated runway, update
         if (this->type== FlightType::DOMESTIC_ARRIVAL||this->type==FlightType::INTERNATIONAL_ARRIVAL){
-            this->phase= Phase::HOLDING;
+            this->phase= FlightPhase::HOLDING;
             this->speed= 400 + rand()%201;
-            this->altitude=
-            this->fuelLevel=
+            //this->altitude=;
+            //this->fuelLevel=;
         }
         else{
             this->phase=FlightPhase::GATE;
             this->speed=0;
-            this->altitude=
-            this->fuelLevel=
+            //this->altitude=
+            //this->fuelLevel=
         }
-        if (this->airlineType==AirlineType::MEDICAL||this->airlineType==AirlineType::MILITARY)
-            this->priority=1;
-        else
-            this->priority=0;
+        this->priority=0;//based on airline type
     }
 
     void changePhase() {
@@ -150,6 +138,7 @@ public:
     }
 };
 
+/*
 class AVN {
 public:
     int flightID;
@@ -171,7 +160,8 @@ public:
         dueDate= std::chrono::system_clock::to_time_t(futureTime);
     }
 };
-
+*/
+/*
 class ATCDashboard {
 public:
     int numViolations;
@@ -186,6 +176,7 @@ public:
         // Add AVN violation
     }
 };
+*/
 
 class Phase {
 public:
@@ -194,16 +185,17 @@ public:
     float altitudeLowerLimit;
     float altitudeUpperLimit;
     Phase():speedLowerLimit(0.0), speedUpperLimit(0.0), altitudeLowerLimit(0.0), altitudeUpperLimit(0.0){}
-
+    Phase(float sLower,float sUpper,float aLower,float aUpper):speedLowerLimit(sLower),speedUpperLimit(sUpper),altitudeLowerLimit(aLower),altitudeUpperLimit(aUpper){}
 };
 
-// initialise the 8 phases
-Phase flightPhases[NUM_FLIGHT_PHASES];
-
-//initialise 6 airlines
-Airline airlines[6];
 
 
+
+int main(){
+
+
+
+}
 
 /// ALTITUDES in ft
 
@@ -212,14 +204,16 @@ Airline airlines[6];
 // landing 800 to 0
 
 //takeoff 0-500
-//climb 500-10,000
-//cruise 10,000
+//climb 500-10000
+//cruise 10000??
 
 //SPEEDS in kmh
 
 //holding 400-600
 //approach 240-290
+//landing 240->30
 //taxi 15-30
+//gate 0-5/10
 // takeoff 0-290
 // climb 250-463
 // cruise 800-900
