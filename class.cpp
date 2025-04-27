@@ -281,6 +281,7 @@ void* simulateFlightDeparture(void* arg) {
     //10kmh/s
     while(1){
         flight->speed+=10;
+        
         flight->printStatus();
         sleep(1);
     }
@@ -373,6 +374,18 @@ void* createInitialFlights(void * arg) {
 }
 */
 
+void* simulationTimer(void* arg) {
+    time_t start = time(nullptr);
+
+    while ( difftime(time(nullptr), start) < SIMULATION_DURATION) {
+
+        int current = difftime(time(nullptr), start);
+        cout << "\rSimulation Time: " << current << "s / " << SIMULATION_DURATION << "s" << flush;
+        sleep(1);
+    }
+    pthread_exit(nullptr);
+}
+
 int main() {
     srand(time(nullptr));
 
@@ -382,11 +395,11 @@ int main() {
     //pthread_join(dispatcherThread, NULL);
 
     //test with a single flight for now
-    Flight test(1,FlightType::DOMESTIC_DEPARTURE,AirlineType::COMMERCIAL);
+    //Flight test(1,FlightType::DOMESTIC_DEPARTURE,AirlineType::COMMERCIAL);
     //start flight simulation
     // for now start the first flight
     pthread_t tid;
-    pthread_create(&tid,nullptr,simulateFlightDeparture,(void*)&test); //create flight thread
+    pthread_create(&tid,nullptr,simulationTimer,NULL); //create flight thread
     pthread_join(tid,NULL);
 
     return 0;

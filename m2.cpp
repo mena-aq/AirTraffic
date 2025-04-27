@@ -257,14 +257,15 @@ public:
             return this->airlineType < other.airlineType; // smaller airlineType first
         if (this->fuelLevel != other.fuelLevel)
             return this->fuelLevel < other.fuelLevel;     // smaller fuel first
+        // NOT CHECKING PROPERLY RIP
         //directions priority (emergency %)
-        if (this->isArrival() &&  other.isArrival()){
+        if (this->isArrival() && other.isArrival()){
             //north over south
-            return (this->direction!=other.direction && this->direction=='N' && other.direction=='S');
+            return (this->direction=='N' && other.direction=='S');
         } 
         else if (this->isDeparture() && other.isDeparture()){ //departure
             //west over east
-            return (this->direction!=other.direction && this->direction=='W' && other.direction=='E');
+            return (this->direction=='W' && other.direction=='E');
         }
         return this->id < other.id;                       // earlier arrival first (smaller id)       
     }
@@ -942,12 +943,11 @@ int main() {
     QueueFlights* qf= new QueueFlights;
 
     //int id, FlightType flightType, AirlineType airlineType, AirlineName name
-    Flight* fl1= new Flight(1, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA);
-    Flight* fl2= new Flight(2, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: MEDICAL, AirlineName:: AghaKhan_Air_Ambulance);
-    Flight* fl3= new Flight(3, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: COMMERCIAL, AirlineName:: PIA);
-    Flight* fl4 = new Flight(4, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: MEDICAL, AirlineName:: AghaKhan_Air_Ambulance);
+    Flight* fl1= new Flight(1, FlightType::DOMESTIC_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA);
+    Flight* fl2= new Flight(2, FlightType::INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: AghaKhan_Air_Ambulance);
+    //Flight* fl3= new Flight(3, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: COMMERCIAL, AirlineName:: PIA);
+    //Flight* fl4 = new Flight(4, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: MEDICAL, AirlineName:: AghaKhan_Air_Ambulance);
 
-    /*
     qf->addFlight(fl1);
     Flight* currentFlight = qf->incomingQueue.front();
     qf->incomingQueue.erase(qf->incomingQueue.begin());
@@ -967,8 +967,8 @@ int main() {
     pthread_t thread2;
     pthread_create(&(fl2->thread_id), nullptr, simulateFlightArrival, (void*)a2);
     //sleep(1);
-    */
 
+    /*
     qf->addFlight(fl3);
     Flight* currentFlight3 = qf->outgoingQueue.front();
     qf->outgoingQueue.erase(qf->outgoingQueue.begin());
@@ -986,6 +986,7 @@ int main() {
     a4->qf= qf;
     pthread_create(&(fl4->thread_id), nullptr, simulateFlightDeparture, (void*)a4);
     usleep(1000);
+*/
 
     pthread_exit(NULL);
     return 0;

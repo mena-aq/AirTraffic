@@ -217,26 +217,6 @@ public:
                 << " | Priority: " << priority << "\n";
     }
 
-    /*
-    pthread_mutex_t threadMutex = PTHREAD_MUTEX_INITIALIZER;
-    void rerouteFlight() {
-        pthread_mutex_lock(&threadMutex);
-        if (this->thread_id != -1) {
-            int cancelResult = pthread_cancel(this->thread_id);
-            if (cancelResult == 0) {
-                pthread_join(this->thread_id, nullptr);
-                printf("Re-routing flight %d\n", this->id);
-            } else {
-                printf("Failed to cancel thread for flight %d\n", this->id);
-            }
-            this->thread_id = -1;
-        } else {
-            printf("Thread for flight %d is not active or already joined.\n", this->id);
-        }
-        pthread_mutex_unlock(&threadMutex);
-    }
-    */
-
     //ADDED
     void rerouteFlight(){
         pthread_cancel(this->thread_id);
@@ -272,17 +252,6 @@ public:
 
 };
 
-/*
-struct Comparator {
-    bool operator()(const Flight& a, const Flight& b) const {
-        if (a.airlineType != b.airlineType)
-            return a.airlineType < b.airlineType; // smaller airlineType first
-        if (a.fuelLevel != b.fuelLevel)
-            return a.fuelLevel < b.fuelLevel;     // smaller fuel first
-        return a.id < b.id;                       // earlier arrival first (smaller id)
-    }
-};
-*/
 
 class QueueFlights {
 public:
@@ -303,6 +272,7 @@ public:
             //cout<<"Flight: "<<flight->id<<"entered in out\n";
             sortQueue(outgoingQueue);
         }
+        printf("Flight %d added to Q\n",flight->id);
     }
 
     /*void processArrivals() {
@@ -374,6 +344,7 @@ public:
         pthread_mutex_unlock(&lock);
         currentFlight->rerouteFlight();
         //terminateRadar() 
+
         qf->addFlight(currentFlight);
         printf("Flight %d pre-empt runway from flight %d\n",flight->id,currentFlight->id);
         pthread_mutex_lock(&lock);
@@ -390,7 +361,7 @@ public:
             return;
         }
         else{
-            printf("can i pre-empt?\n");
+            //printf("can i pre-empt?\n");
             //compare priorities and if pre-emptable phase
             if (flight->isArrival() && currentFlight->isArrival()){ //arrivals 
                 if (*flight<*currentFlight && currentFlight->phase<FlightPhase::LANDING){//higher priority and not on ground
@@ -420,68 +391,7 @@ public:
         currentFlight = nullptr;
     }
 
-    /*
-    void acquireRunway(Flight* flight, QueueFlights*& qf) {
-        
-        pthread_mutex_lock(&lock);
-
-        // If the runway is free, acquire it
-        if (!busy) {
-            currentFlight = flight;
-            busy = true;
-            std::cout << "Runway " << runwayID << " acquired by Flight ID: " << flight->id << "\n";
-        }
-        else {
-            std::cout << "INSIDE CHECK\n";
-            flight->printStatus();
-            currentFlight->printStatus();
-
-            // Preempt the current flight if the new flight has higher priority
-            if (flight->airlineType < currentFlight->airlineType || flight->fuelLevel < currentFlight->fuelLevel || flight->id < currentFlight->id) {
-
-                std::cout << "Runway " << runwayID << " preempted! Flight ID "
-                        << currentFlight->id << " -> Flight ID " << flight->id << "\n";
-                
-                // Add the preempted flight back into the queue and block it
-                qf->addFlight(*currentFlight);
-                pthread_cond_broadcast(&cond);
-
-                // Set the current flight to the new one and signal that it can proceed
-                currentFlight = flight;
-                busy = true;
-            } else {
-                // If the current flight can't be preempted, wait until it's done
-                std::cout << "Flight ID: " << flight->id << " waiting for runway " << runwayID << "\n";
-                while (busy) {
-                    pthread_cond_wait(&cond, &lock);
-                }
-
-                // After being signaled, try to acquire the runway
-                currentFlight = flight;
-                busy = true;
-                std::cout << "Runway " << runwayID << " acquired after wait by Flight ID: " << flight->id << "\n";
-            }
-        }
-
-        pthread_mutex_unlock(&lock);
-    }
-    */
-    /*
-    void releaseRunway() {
-        pthread_mutex_lock(&lock);
-
-        // Release the runway and allow other waiting flights to proceed
-        std::cout << "Runway " << runwayID << " released by Flight ID: " 
-                    << (currentFlight ? currentFlight->id : -1) << "\n";
-        
-        busy = false;
-        currentFlight = nullptr;
-
-        // Wake up all waiting flights, because the runway is now available
-        pthread_cond_broadcast(&cond);
-
-        pthread_mutex_unlock(&lock);
-    }*/
+   
 };
 
 
@@ -562,13 +472,14 @@ void* simulateFlightDeparture(void* arg) {
         while(1){
             flight->speed += 10800/3600.0; //v=u+at
             distanceToRunway -= flight->speed/3600.0 + 0.5*10800*pow((1.0/3600),2); //ut+1/2at^2
-            printf("Flight : %d Distance to Runway= %f. Speed=%f\n",flight->id, distanceToRunway,flight->speed);
+            flight->consumeFuel();
+            //printf("Flight : %d Distance to Runway= %f. Speed=%f\n",flight->id, distanceToRunway,flight->speed);
             //flight->printStatus();
             if (flight->speed>=15)
                 break;
+            pthread_testcancel(); // safe cancellation point
             //sleep(1);
             usleep(1000);
-            flight->consumeFuel();
         }
         flight->phase = FlightPhase::TAXI;
         // TAXI
@@ -576,19 +487,21 @@ void* simulateFlightDeparture(void* arg) {
         while (distanceToRunway>0.0104){
             //flight->speed += (rand()%10)/10.0; //fluctuate ~0.1
             distanceToRunway -= flight->speed/3600; //s=vt
-            printf("Flight : %d Distance to Runway= %f. Speed=%f\n", flight->id, distanceToRunway,flight->speed);
-            //sleep(1);
-            usleep(1000);
             flight->consumeFuel();
+            //printf("Flight : %d Distance to Runway= %f. Speed=%f\n", flight->id, distanceToRunway,flight->speed);
+            //sleep(1);
+            pthread_testcancel(); // safe cancellation point
+            usleep(1000);
         }
         // TAXI->STOP 
         while(flight->speed>=0){
             flight->speed -= 10800/3600.0;
             distanceToRunway -= flight->speed/3600.0 + 0.5*10800*pow((1.0/3600),2); //ut+1/2at^2
-            printf("Flight : %d Distance to Runway= %f. Speed=%f\n",flight->id,distanceToRunway, flight->speed);
-            //sleep(1);
-            usleep(1000);
             flight->consumeFuel();
+            //printf("Flight : %d Distance to Runway= %f. Speed=%f\n",flight->id,distanceToRunway, flight->speed);
+            //sleep(1);
+            pthread_testcancel(); // safe cancellation point
+            usleep(1000);
         }
         printf("Flight : %d Stopped at runway dist=%f, prepare to takeoff\n",flight->id, distanceToRunway); //ye submit krna h??? its wirtten in milestone 2 and class to nhi h 
         // TAKEOFF
@@ -597,10 +510,10 @@ void* simulateFlightDeparture(void* arg) {
         while (flight->speed<250){
             flight->speed += 12000.0/3600; //v=u+at
             distanceAlongRunway -= flight->speed/3600.0 + 0.5*12000*pow((1.0/3600),2); //ut+1/2at^2
-            printf("Flight : %d takeoff, speed=%f, altitude=%f, dist=%f\n",flight->id, flight->speed,flight->altitude,distanceAlongRunway);
+            flight->consumeFuel();
+            //printf("Flight : %d takeoff, speed=%f, altitude=%f, dist=%f\n",flight->id, flight->speed,flight->altitude,distanceAlongRunway);
             //sleep(1);
             usleep(1000);
-            flight->consumeFuel();
         }
         printf("Flight : %d Takeoff at dist remaining=%f\n", flight->id, distanceAlongRunway);
         // CLIMB
@@ -608,10 +521,10 @@ void* simulateFlightDeparture(void* arg) {
         while (flight->altitude < flightPhases[(int)FlightPhase::CRUISE].altitudeLowerLimit){
             flight->speed += 1637*(1.0/3600); //v=u+at
             flight->altitude += 3280*(flight->speed*sin(M_PI/12)*(1.0/3600) + 0.5*1637*pow((1.0/3600),2));//ut+1/2at^2
-            printf("Flight : %d climb, speed=%f, altitude=%f\n", flight->id,flight->speed,flight->altitude);
+            flight->consumeFuel();
+            //printf("Flight : %d climb, speed=%f, altitude=%f\n", flight->id,flight->speed,flight->altitude);
             //sleep(1);
             usleep(1000);
-            flight->consumeFuel();
         }
         //CLIMB->CRUISE
         printf("Flight : %d Bring to cruise\n", flight->id);
@@ -620,7 +533,7 @@ void* simulateFlightDeparture(void* arg) {
             flight->altitude += 3280 *(flight->speed*sin(M_PI/12)*(1.0/3600) + 0.5*63568*pow((1.0/3600),2));//ut+1/2at^2
             usleep(1000);
             flight->consumeFuel();
-            printf("Flight : %d climb->cruise, speed=%f, altitude=%f\n", flight->id, flight->speed,flight->altitude);
+            //printf("Flight : %d climb->cruise, speed=%f, altitude=%f\n", flight->id, flight->speed,flight->altitude);
             //flight->printStatus();
         }
         flight->phase=FlightPhase::CRUISE;
@@ -651,8 +564,8 @@ void* simulateFlightArrival(void* arg){
     Flight* flight= argument->flight;
     QueueFlights* qf= argument->qf;
 
-    cout<<"Entered\n";
-    printf("Thread id = %ld\n",flight->thread_id);
+    //cout<<"Entered\n";
+    //printf("Thread id = %ld\n",flight->thread_id);
     flight->printStatus();
     //printf("--ARRIVAL--\n");
     //printf("flight details:");
@@ -676,7 +589,7 @@ void* simulateFlightArrival(void* arg){
             distanceToRunway -= flight->speed/3600.0 + 0.5*-4805*pow((1.0/3600),2); //ut+1/2at^2
             flight->altitude -= 30; //safe (if 1km away its 107ft/s which would kill everyone i fear)
             flight->consumeFuel();
-            printf("flight %d : holding->approach, speed=%f, altitude=%f, dist=%f\n", flight->id, flight->speed,flight->altitude,distanceToRunway);
+            //printf("flight %d : holding->approach, speed=%f, altitude=%f, dist=%f\n", flight->id, flight->speed,flight->altitude,distanceToRunway);
             //sleep(1);
             pthread_testcancel(); // safe cancellation point
             usleep(1000);
@@ -688,7 +601,7 @@ void* simulateFlightArrival(void* arg){
             distanceToRunway -= flight->speed/3600.0 + 0.5*-12500*pow((1.0/3600),2); //ut+1/2at^2
             flight->altitude -= 70;   
             flight->consumeFuel();
-            printf("flight %d : approach, speed=%f, altitude=%f, dist=%f\n",flight->id, flight->speed,flight->altitude,distanceToRunway);
+            //printf("flight %d : approach, speed=%f, altitude=%f, dist=%f\n",flight->id, flight->speed,flight->altitude,distanceToRunway);
             //sleep(1);
             pthread_testcancel(); // safe cancellation point
             usleep(1000);
@@ -705,10 +618,18 @@ void* simulateFlightArrival(void* arg){
                     flight->altitude=0;
             }
             flight->consumeFuel();
-            printf("flight %d : landing, speed=%f, altitude=%f, dist=%f\n",flight->id, flight->speed,flight->altitude,distanceAlongRunway);
+            //printf("flight %d : landing, speed=%f, altitude=%f, dist=%f\n",flight->id, flight->speed,flight->altitude,distanceAlongRunway);
             //sleep(1);
             usleep(1000);
         }
+
+        //release runway since now off of it 
+        if(flight->airlineType==CARGO){
+            rwyC.releaseRunway();
+        }
+        else
+            rwyA.releaseRunway();
+            
         //TAXI
         flight->phase = FlightPhase::TAXI;
         float distanceToGate = distanceAlongRunway+TERMINAL_TO_RUNWAY_LEN;
@@ -718,7 +639,7 @@ void* simulateFlightArrival(void* arg){
             }
             distanceToGate -= flight->speed/3600.0 + 0.5*-1000*pow((1.0/3600),2); //ut+1/2at^2
             flight->consumeFuel();
-            printf("flight %d : taxi, speed=%f, dist=%f\n",flight->id, flight->speed,distanceToGate);
+            //printf("flight %d : taxi, speed=%f, dist=%f\n",flight->id, flight->speed,distanceToGate);
             //sleep(1);
             usleep(1000);
         }
@@ -727,17 +648,12 @@ void* simulateFlightArrival(void* arg){
             flight->speed += -1125*(1.0/3600); //v=u+at
             distanceToGate -= flight->speed/3600.0 + 0.5*-1125*pow((1.0/3600),2); //ut+1/2at^2
             flight->consumeFuel();
-            printf("flight %d : taxi->gate, speed=%f, dist=%f\n",flight->id, flight->speed,distanceToGate);
+            //printf("flight %d : taxi->gate, speed=%f, dist=%f\n",flight->id, flight->speed,distanceToGate);
             //sleep(1);
             usleep(1000);
         }
         flight->phase = FlightPhase::GATE;
             
-        if(flight->airlineType==CARGO){
-            rwyC.releaseRunway();
-        }
-        else
-            rwyA.releaseRunway();
     }
 
     //exit atomicaly
@@ -772,13 +688,16 @@ int Timer::currentTime = 0;
 class Radar{
 public:
     pthread_t thread_id;
-//radar thread function (per flight)
+    static Flight* flight;
+
+    Radar():thread_id(-1){}
+    //radar thread function (per flight)
     static void* flightRadar(void* arg){
 
-        Flight* flight = (Flight*)arg; 
+        flight = (Flight*)arg; 
         bool violation[NUM_FLIGHT_PHASES] = {0}; //no phase violation yet
         
-        while(flight){ //flight ongoing
+        while(flight && flight->thread_id!=-1){ //flight ongoing
             if (flight->checkViolation() && !violation[(int)flight->phase]) {//if first violation of phase
                 FlightPhase phase = flight->phase;
                 int amount=0;
@@ -792,10 +711,11 @@ public:
                     amount+= 0.15*amount;
                 }
                 AVN avn(flight->id, flight->speed, amount, phase);
-                avn.printAVN();
+                //avn.printAVN();
 
                 violation[(int)flight->phase]=true;
-            }         
+            }  
+            pthread_testcancel(); // safe cancellation point       
             //flight->printStatus();
             //sleep(1);
             usleep(1000);
@@ -804,9 +724,13 @@ public:
     }
     void terminateRadar(){
         pthread_cancel(this->thread_id);
+        pthread_join(this->thread_id, nullptr);
         this->thread_id = -1;
+        printf("Cancelling radar for flight %d\n",flight->id);
+        flight=nullptr;
     }
 };
+Flight* Radar::flight = nullptr;
 
 class Dispatcher{
 public:
@@ -814,7 +738,7 @@ public:
 
     int numFlightsDispatched;
     static pthread_t flightTid[TOTAL_FLIGHTS]; //all flight thread ids
-    //static pthread_t radarTid[TOTAL_FLIGHTS]; //all radar thread ids
+    static pthread_t radarTid[TOTAL_FLIGHTS]; //all radar thread ids
     static int flightsRemainingPerAirline[NUM_AIRLINE];
 
     QueueFlights* queue; 
@@ -881,11 +805,11 @@ public:
 
                     if (flight->type == INTERNATIONAL_ARRIVAL || flight->type == DOMESTIC_ARRIVAL) {
                         pthread_create(&(flight->thread_id), nullptr, simulateFlightArrival, (void*)arg);
-                        //pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
+                        pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
                     }
                     else {
                         pthread_create(&(flight->thread_id), nullptr, simulateFlightDeparture, (void*)arg);
-                        //pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
+                        pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
                     }
 
                     dispatcher->numFlightsDispatched++;
@@ -915,7 +839,7 @@ public:
 
 };
 pthread_t Dispatcher::flightTid[TOTAL_FLIGHTS];
-//pthread_t Dispatcher::radarTid[TOTAL_FLIGHTS];
+pthread_t Dispatcher::radarTid[TOTAL_FLIGHTS];
 int Dispatcher::flightsRemainingPerAirline[NUM_AIRLINE] = {4, 4, 2, 1, 2, 1};
 
 int main() {

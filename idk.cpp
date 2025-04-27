@@ -7,6 +7,7 @@
 #include <ctime>
 #include <chrono>
 #include <cmath>
+using namespace std;
 
 // ATC SYSTEM CONSTANTS 
 #define NUM_FLIGHT_PHASES 8
@@ -260,7 +261,7 @@ public:
         printAirlineName(airlineName);
         std::cout << " | Airline Type: ";
         printAirlineType(airlineType);
-               std::cout << " | " << speed << " km/h | Alt: " << altitude
+               cout << " | " << speed << " km/h | Alt: " << altitude
                 << " ft | Phase: ";
         printPhase(phase);
         std::cout << " | Fuel: " << fuelLevel
@@ -353,10 +354,25 @@ public:
 
 void* simulateFlightDeparture(void* arg) {
     Flight* flight = static_cast<Flight*>(arg);
+    printf("--DEPARTURE--\n");
+    printf("flight details:");
+    printf("flight ID: %d\n",flight->id);
 
     //accelerate by 10km/s
     //gate->taxi
     flight->checkFaults();
+    //departures use rwyB
+    if(flight->airlineType==CARGO){
+        rwyC.acquireRunway(flight->direction);
+    }
+    else
+        rwyB.acquireRunway(flight->direction); //if busy wait
+    printf("Runway B acquired by flight ID: %d\n",flight->id);
+
+    // SIMULATE
+    sleep(2);
+
+    /*
     printf("Gate to Taxi\n");
     while(1){
         flight->speed+=5; //acclelerate at 5km/s2
@@ -388,13 +404,6 @@ void* simulateFlightDeparture(void* arg) {
         flight->consumeFuel();
     }
     printf("Stopped at runway dist=%f, prepare to takeoff\n",distToRunway); //ye submit krna h??? its wirtten in milestone 2 and class to nhi h 
-    //departures use rwyB
-    if(flight->airlineType==CARGO){
-        rwyC.acquireRunway(flight->direction);
-    }
-    else
-        rwyB.acquireRunway(flight->direction); //if busy wait
-    printf("Runway B freed up, ready for takeoff\n");
     //takeoff
     flight->phase = FlightPhase::TAKEOFF;
     float distAlongRwy = RUNWAY_LEN + distToRunway;
@@ -417,12 +426,15 @@ void* simulateFlightDeparture(void* arg) {
         usleep(1000);
         flight->consumeFuel();
     }
+    */
      if(flight->airlineType==CARGO){
         rwyC.releaseRunway();
     }
-    else
+    else{
         rwyB.releaseRunway();
-
+    }
+    printf("Runway B released by flight ID: %d\n",flight->id);
+/*
     //bring to cruise
     printf("Bring to cruise\n");
     while (flight->speed<800){
@@ -435,17 +447,49 @@ void* simulateFlightDeparture(void* arg) {
     }
     flight->phase=FlightPhase::CRUISE;
     printf("Cruising\n");
+*/
+    //exit atomicaly
+    pthread_mutex_lock(&flightMutex);
+    free(flight);
+    pthread_mutex_unlock(&flightMutex);
+    
+
+
+    pthread_exit(nullptr);
+}
+void* simulateFlightArrival(void* arg){
+    Flight* flight = static_cast<Flight*>(arg);
+    printf("--DEPARTURE--\n");
+    printf("flight details:");
+    printf("flight ID: %d\n",flight->id);
+
+    //accelerate by 10km/s
+    //gate->taxi
+    flight->checkFaults();
+    //departures use rwyB
+    if(flight->airlineType==CARGO){
+        rwyC.acquireRunway(flight->direction);
+    }
+    else
+        rwyA.acquireRunway(flight->direction); //if busy wait
+    printf("Runway A acquired by flight ID: %d\n",flight->id);
+
+    //SIMULATE
+    sleep(2);
+        
+    if(flight->airlineType==CARGO){
+        rwyC.releaseRunway();
+    }
+    else
+        rwyA.releaseRunway();
+    printf("Runway A released by flight ID: %d\n",flight->id);
+
 
     //exit atomicaly
     pthread_mutex_lock(&flightMutex);
     free(flight);
     pthread_mutex_unlock(&flightMutex);
-    printf("departure\n");
-    pthread_exit(nullptr);
-}
-void* simulateFlightArrival(void* arg){
-    //dummy
-    printf("arrival\n");
+        
     pthread_exit(nullptr);
 }
 
@@ -458,7 +502,7 @@ public:
 
         while ( difftime(time(nullptr), start) < SIMULATION_DURATION) {
             currentTime = difftime(time(nullptr), start);
-            std::cout << "\rSimulation Time: " << currentTime << "s / " << SIMULATION_DURATION << "s " << std::flush;
+            std::cout << "\rSimulation Time: " << currentTime << "s / " << SIMULATION_DURATION << "s \n" << flush;
             sleep(1);
         }
         pthread_exit(nullptr);
