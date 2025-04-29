@@ -246,11 +246,14 @@ public:
     }
 
     //operator for priority 
-    bool operator<(const Flight& other) const{
-        if (this->priority!=other.priority)
-            return (this->priority>other.priority); //priority sched //im doing fuel alr         
-        return this->id < other.id;                       // FCFS    
+
+    bool operator<(const Flight*& other) const{
+        printf("comparing\n");
+        if (this->priority!=other->priority)
+            return (this->priority > other->priority); //priority sched //im doing fuel alr         
+        return this->id < other->id;                       // FCFS    
     }
+
 
     // THE FLIGHT SIMULATION FUNCTIONS
     void simulateFlightDeparture() {                                        
@@ -451,7 +454,12 @@ public:
     // Helper to sort a vector based on Comparator
     void sortQueue() {
         //std::sort(flights.begin(), flights.end(), Comparator());
-        std::sort(flightQueue.begin(), flightQueue.end());
+        //std::sort(flightQueue.begin(), flightQueue.end());
+        std::sort(flightQueue.begin(), flightQueue.end(), [](Flight* a, Flight* b) {
+            if (a->priority != b->priority)
+                return a->priority > b->priority; // Higher priority = comes first
+            return a->id < b->id; // FCFS if same priority
+        });
     }
     void addFlight(Flight*& flight) {
         flightQueue.push_back(flight);
@@ -813,7 +821,9 @@ public:
         // START AIR TRAFFIC CONTROL OF ALL FLIGHTS BY FCFS/PRIORITY
         while ( !flightsQueue->isEmpty() /*&& Timer::currentTime < SIMULATION_DURATION*/) {
 
+            printf("call sort\n");
             flightsQueue->sortQueue();
+            flightsQueue->printQueues();
 
             //dispatch the front (highest priority flight)
             Flight* currentFlight = flightsQueue->getNextFlight();
