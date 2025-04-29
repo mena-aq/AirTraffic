@@ -62,8 +62,6 @@ enum FlightPhase {
     LANDING
 };
 
-bool flightTurn[TOTAL_FLIGHTS]={false};
-
 
 // CLASSES
 // Phase configuration class
@@ -137,7 +135,7 @@ public:
     const FlightType flightType; //international/domestic arrival/departure
     const AirlineType airlineType; //commercial,cargo,med,military etc
     const AirlineName airlineName; // PIA etc
-    char direction; // N, S, E, W
+    const char direction; // N, S, E, W
 
     FlightPhase phase; //current phase flight is in
     float speed; //current speed
@@ -149,7 +147,7 @@ public:
 
     bool faulty;
 
-    Flight(int id, FlightType flightType, AirlineType airlineType, AirlineName name) :  id(id), thread_id(-1), radar_id(-1), airlineName(name), airlineType(airlineType), flightType(flightType), waitingTime(0), faulty(false){    
+    Flight(int id, FlightType flightType, AirlineType airlineType, AirlineName name) :  id(id), thread_id(-1), radar_id(-1), airlineName(name), flightType(flightType), waitingTime(0), faulty(false){    
         
         if (flightType == FlightType::DOMESTIC_ARRIVAL || flightType == FlightType::INTERNATIONAL_ARRIVAL) {
             phase = FlightPhase::HOLDING; // if its arriving, start phase is holding
@@ -247,14 +245,14 @@ public:
     //operator for priority 
     bool operator<(const Flight& other) const{
         if (this->priority!=other.priority)
-            return (this->priority>other.priority); //priority sched //im doing fuel alr         
+            return (this->priority>other.priority);        //priority sched
         return this->id < other.id;                       // FCFS    
     }
 
     // THE FLIGHT SIMULATION FUNCTIONS
     void simulateFlightDeparture() {                                        
     
-        printf("DEPARTURE: flight ID: %d\n",this->id);
+        printf("DEPARTURE: flight ID: %d\n",flight->id);
     
         // ------------- SIMULATE --------------
     
@@ -345,7 +343,7 @@ public:
 
     void simulateFlightArrival(){  
     
-        printf(" ARRIVAL :flight ID: %d\n",this->id);
+        printf(" ARRIVAL :flight ID: %d\n",flight->id);
     
         //rwyA.acquireRunway(flight,qf);
     
@@ -448,9 +446,9 @@ public:
     vector<Flight*> flightQueue;
     
     // Helper to sort a vector based on Comparator
-    void sortQueue() {
+    void sortQueue(std::vector<Flight*>& flights) {
         //std::sort(flights.begin(), flights.end(), Comparator());
-        std::sort(flightQueue.begin(), flightQueue.end());
+        std::sort(flights.begin(), flights.end());
     }
     void addFlight(Flight*& flight) {
         flightQueue.push_back(flight);
@@ -462,7 +460,7 @@ public:
         flightQueue.erase(flightQueue.begin());
         return nextFlight;
     }
-    bool isEmpty(){
+    bool empty(){
         return flightQueue.empty();
     }
     void printQueues() {
@@ -471,9 +469,6 @@ public:
             flight->printStatus();
         }
     }
-    Flight*& operator[](int i){
-        return flightQueue[i];
-    } //menahil ab main kia karun?
 };
 
 
@@ -489,7 +484,7 @@ public:
     //bool busy;
     //Flight* currentFlight;
 
-    Runway(char id) : runwayID(id) {
+    Runway(char id, char priorityDirection) : runwayID(id), priorityDirection(priorityDirection) {
         pthread_mutex_init(&lock, nullptr);
         //pthread_cond_init(&cond, nullptr);
         //busy = false;
@@ -500,7 +495,7 @@ public:
         pthread_mutex_destroy(&lock);
         //pthread_cond_destroy(&cond);
     }
-/*
+
     void preemptRunway(Flight* flight,QueueFlights*& qf){
         //send current back to queue, cancel thread and acquire runway
         pthread_mutex_unlock(&lock);
@@ -513,7 +508,6 @@ public:
         currentFlight = flight;
         return;
     }
-*/
     void acquireRunway(){
         pthread_mutex_lock(&lock);
     }
@@ -607,9 +601,9 @@ class ATCDashboard {
 };
 
 //make the 3 runways
-Runway rwyA('A'); 
-Runway rwyB('B'); 
-Runway rwyC('C');
+Runway rwyA('A','N'); //north>south
+Runway rwyB('B','W'); //west>east
+Runway rwyC('C','\0');
 
 
 
@@ -694,18 +688,18 @@ struct args{
 
 void* simulateWaitingAtGate(void* arg){
 
-    args* flightArg = static_cast<args*>(arg);
+    args* flightArg = static_cast<arg*>(arg);
     Flight* flight = flightArg->flight;
-    const char runwayToAcquire = flightArg->runway;
+    const char runwayToAcquire = arg->runway;
 
     flight->phase = FlightPhase::GATE;
     //flight will wait at gate stationary until runway clears
     //if any fault, just tow and remove from queue
-    while (!flightTurn[(flight->id)-1]){
+    while (!flightTurn[flight->id-1]){
         flight->waitingTime++;
         sleep(1);
-        if (int(flight->waitingTime)%100 == 0)
-            flight->priority++; //up the priority every 100s
+        if (flight->waitingTime%100 == 0)
+            this->priority++; //up the priority every 100s
     }
     
     if (runwayToAcquire=='C')
@@ -718,25 +712,25 @@ void* simulateWaitingAtGate(void* arg){
     if (runwayToAcquire=='C')
         rwyC.releaseRunway();
     else
-        rwyB.releaseRunway();
+        rywB.releaseRunway();
 
     pthread_exit(NULL);
 }
 
 void* simulateWaitingInHolding(void* arg){
 
-    args* flightArg = static_cast<args*>(arg);
+    args* flightArg = static_cast<arg*>(arg);
     Flight* flight = flightArg->flight;
-    const char runwayToAcquire = flightArg->runway;
+    const char runwayToAcquire = arg->runway;
 
     flight->phase = FlightPhase::HOLDING;
     //keep holding around airport until its your turn
-    while (flightTurn[(flight->id)-1]){
+    while (flightTurn[flight->id-1]){
         flight->speed += (10-rand()%20);//fluctuate by ~10
         flight->consumeFuel();
         flight->waitingTime++;
-        if (int(flight->waitingTime)%100 == 0)
-            flight->priority++; //up the priority every 100s
+        if (flight->waitingTime%100 == 0)
+            this->priority++; //up the priority every 100s
         sleep(1);
     }
         
@@ -772,45 +766,50 @@ public:
 
     QueueFlights* flights; 
 
-    Dispatcher(char runway,QueueFlights*& flightQueue): runway(runway){
-       this->flights= flightQueue;;
+    Dispatcher(char runway): runway(runway){
+       flights= new QueueFlights;
     }
     
     static void* dispatchFlights(void* arg) {
 
         Dispatcher* dispatcher = (Dispatcher*)(arg);
-        QueueFlights* flightsQueue = dispatcher->flights;
 
         //first launch all the flights
-        for (int i=0; i<TOTAL_FLIGHTS; i++){ 
-            Flight* flight = (*flightsQueue)[i]; 
-            int index = flight->id - 1;
-            if (flight->flightType==FlightType::INTERNATIONAL_ARRIVAL||flight->flightType==FlightType::DOMESTIC_ARRIVAL) 
-                pthread_create(&flightTid[index],NULL,simulateWaitingInHolding,(void*)flight);
+        for (int i=0; i<flights.size(); i++){ 
+            int index = flights[i]->id-1;
+            if (flight[i].flightType==FlightType::INTERNATIONAL_ARRIVAL||flight[i].flightType==FlightType::DOMESTIC_ARRIVAL) 
+                pthread_create(&flightTid[index],NULL,simulateWaitingInHolding,(void*)flights[i]);
             else
-                pthread_create(&flightTid[index],NULL,simulateWaitingAtGate,(void*)flight);
-            pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
+                pthread_create(&flightTid[index],NULL,simulateWaitingAtGate,(void*)flights[i]);
+            pthread_create(&(flights[i]->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flights[i]);
         }
 
         // START AIR TRAFFIC CONTROL OF ALL FLIGHTS BY FCFS/PRIORITY
-        while ( !flightsQueue->isEmpty() && Timer::currentTime < SIMULATION_DURATION) {
+        while ( !dispatcher->flights.empty() && Timer::currentTime < SIMULATION_DURATION) {
 
             //sort (if fuel running out age them etc)
-            flightsQueue->sortQueue();
+            flights.sortQueue();
             //dispatch the front (highest priority flight)
-            Flight* currentFlight = flightsQueue->getNextFlight();
+            Flight* currentFlight = flights.getNextFlight();
 
             //set its turn
-            //pthread_mutex_lock(&turnLock);
+            pthread_mutex_lock(&turnLock);
             flightTurn[currentFlight->id-1]=true;
-            //pthread_mutex_unlock(&turnLock);
+            pthread_mutex_unlock(&turnLock);
 
             pthread_join(currentFlight->thread_id,NULL);
             free(currentFlight);
-          
-            //pthread_mutex_lock(&turnLock);
+            
+            // menahil, im just confused that how are we going to bringthreads from holding function back  
+            // you said k holding me loop exit krkay call krlay, im ok w that
+            //thats what you meant right
+            //pthread_mutex_lock(&rwyA.lock);
+            //pthread_mutex_lock(&rwyA.lock);
+
+            //unset turn            //reaching here means rwy freed, so dispatch next flight
+            pthread_mutex_lock(&turnLock);
             flightTurn[currentFlight->id-1]=false;
-            //pthread_mutex_unlock(&turnLock);
+            pthread_mutex_unlock(&turnLock);
 
         /*
             if (!dispatcher->queue->incomingQueue.empty() || !dispatcher->queue->outgoingQueue.empty()) {
@@ -866,10 +865,11 @@ public:
 
 
 };
-
+/*
 pthread_t Dispatcher::flightTid[TOTAL_FLIGHTS];
 pthread_t Dispatcher::radarTid[TOTAL_FLIGHTS];
-/*
+in
+
 bool flightTurn[TOTAL_FLIGHTS]={false};t Dispatcher::flightsRemainingPerAirline[NUM_AIRLINE] = {4, 4, 2, 1, 2, 1};
 */
 
@@ -879,22 +879,15 @@ int main() {
     initializeFlightPhases();
 
     // INPUT FLIGHTS
-    QueueFlights* rwyAFlights = new QueueFlights;
-    QueueFlights* rwyBFlights = new QueueFlights;
-    QueueFlights* rwyCFlights = new QueueFlights;
-
-
-    Dispatcher rwyADispatcher('A',rwyAFlights);
-    Dispatcher rwyBDispatcher('B',rwyBFlights);
-    Dispatcher rwyCDispatcher('C',rwyCFlights);
+    Dispatcher rwyADispatcher('A');
+    Dispatcher rwyBDispatcher('B');
+    Dispatcher rwyCDispatcher('C');
     
     //should we have two ids? one we give(for indexing) and one they choose, or they just dont get to input that Dispatcher rwyCDispatcher('C');
     
     //input validation of airline?? military not PIA etc (later)
-    Flight* f1 = new Flight(1, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA);
-    Flight* f2 = new Flight(2, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: MILITARY, AirlineName::Pakistan_Airforce);
-    rwyADispatcher.flights->addFlight(f1);
-    rwyADispatcher.flights->addFlight(f2);
+    rwyADispatcher.flights.addFlight(new Flight(1, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA));
+    rwyADispatcher.flights.addFlight(new Flight(2, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: MILITARY, AirlineName::Pakistan_Airforce));
      
     //rwyBDispatcher.flights.addFlight(new Flight(3, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: COMMERCIAL, AirlineName:: PIA));
     //rwyBDispatcher.flights.addFlight(new Flight(4, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: MEDICAL, AirlineName:: AghaKhan_Air_Ambulance));
@@ -903,7 +896,7 @@ int main() {
     //rwyCDispatcher.flights.addFlight(new Flight(6, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: CARGO, AirlineName:: Blue_Dart));
 
     pthread_t dispatcherA;
-    pthread_t dispatcherB;// im fixing things and its still giving those errors when i run it like i didnt fix them
+    pthread_t dispatcherB;
     pthread_t dispatcherC;
 
     pthread_create(&dispatcherA, nullptr, Dispatcher::dispatchFlights, (void*)&rwyADispatcher);  // Pass dispatcher to the thread
