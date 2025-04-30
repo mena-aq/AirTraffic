@@ -668,7 +668,7 @@ public:
         bool violation[NUM_FLIGHT_PHASES]={false};
 
         
-       while(flight && flight->thread_id!=-1){ //flight ongoing
+       while(flight && flight->phase!=FlightPhase::DONE){ //flight ongoing
             FlightPhase phase = flight->phase;
             int phaseIndex = static_cast<int>(phase);
            //pthread_mutex_lock(&radarLock);
@@ -691,7 +691,6 @@ public:
                 //printf("After update violation[%d]=%d\n",phaseIndex,violation[phaseIndex]);
             }
 
-            pthread_testcancel(); // safe cancellation point
             //flight->printStatus();
             //sleep(1);
             usleep(1000);
@@ -839,7 +838,7 @@ public:
             else
                 pthread_create(&flightTid[index],NULL,simulateWaitingAtGate,(void*)flightArg);
             flight->thread_id = flightTid[index]; 
-            //pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
+            pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
         }
         //domestic flights
         for (int i=0; i<domesticFlightsQueue->numInQueue(); i++){ 
@@ -853,7 +852,7 @@ public:
             else
                 pthread_create(&flightTid[index],NULL,simulateWaitingAtGate,(void*)flightArg);
                 flight->thread_id = flightTid[index]; 
-            //pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
+            pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
         }
         sleep(1); //this is the bandaid holding this tgt
 
