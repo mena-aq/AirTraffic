@@ -14,21 +14,19 @@ using namespace std;
 // ATC SYSTEM CONSTANTS 
 #define NUM_FLIGHT_PHASES 8
 #define NUM_AIRLINE 6
-#define TOTAL_FLIGHTS 9
+#define TOTAL_FLIGHTS 3
 #define GRID 6 
 #define SIMULATION_DURATION 300
 //assume runways start at (0,0), so each quadrant is 3x3 km
-#define RUNWAY_LEN GRID/2
-#define TERMINAL_TO_RUNWAY_LEN 0.5
+#define RUNWAY_LEN 0.6
+#define TERMINAL_TO_RUNWAY_LEN 0.03
 
-//MUTEXES
-pthread_mutex_t flightMutex; 
 
 // ENUMS
 enum AirlineType {
     //highest priority
-    MEDICAL, //EMERGENCY??
-    MILITARY, //VIP??
+    MEDICAL, 
+    MILITARY, 
     CARGO,
     COMMERCIAL
     //lowest priority
@@ -88,13 +86,13 @@ class Phase {
 Phase flightPhases[NUM_FLIGHT_PHASES];
 void initializeFlightPhases() {
     flightPhases[(int)FlightPhase::GATE] = Phase{0, 10, 0, 0};
-    flightPhases[(int)FlightPhase::TAXI] = Phase{0, 30, 0, 0};
-    flightPhases[(int)FlightPhase::TAKEOFF] = Phase{0, 290, 0, 500};                          
-    flightPhases[(int)FlightPhase::CLIMB] = Phase{250, 802, 0, 10050}; 
-    flightPhases[(int)FlightPhase::CRUISE] = Phase{800, 900, 30000, 42000};
-    flightPhases[(int)FlightPhase::HOLDING] = Phase{288, 600, 5950, 14000};
-    flightPhases[(int)FlightPhase::APPROACH] = Phase{240, 290, 800, 6050};
-    flightPhases[(int)FlightPhase::LANDING] = Phase{29, 245, 0, 800};
+    flightPhases[(int)FlightPhase::TAXI] = Phase{15, 30, 0, 0};
+    flightPhases[(int)FlightPhase::TAKEOFF] = Phase{0, 290, 0, 500};                            
+    flightPhases[(int)FlightPhase::CLIMB] = Phase{250, 463, 0, 5000};
+    flightPhases[(int)FlightPhase::CRUISE] = Phase{800, 900, 5000, 10000};
+    flightPhases[(int)FlightPhase::HOLDING] = Phase{290, 600, 2000, 5000};
+    flightPhases[(int)FlightPhase::APPROACH] = Phase{240, 290, 800, 1000};
+    flightPhases[(int)FlightPhase::LANDING] = Phase{30, 240, 0, 800};
 }
 void printPhase(FlightPhase phase) {
     switch (phase) {
@@ -148,15 +146,16 @@ public:
     int priority; //priority of flight for runway access
     float fuelLevel; //in gallons
     float waitingTime; 
+    float scheduledTime;
 
     bool faulty;
 
-    Flight(int id, FlightType flightType, AirlineType airlineType, AirlineName name) :  id(id), thread_id(-1), radar_id(-1), airlineName(name), airlineType(airlineType), flightType(flightType), waitingTime(0), faulty(false){    
+    Flight(int id, FlightType flightType, AirlineType airlineType, AirlineName name,float st, char dir ) :  id(id), direction(dir), scheduledTime(st), thread_id(-1), radar_id(-1), airlineName(name), airlineType(airlineType), flightType(flightType), waitingTime(0), faulty(false){    
         
         if (flightType == FlightType::DOMESTIC_ARRIVAL || flightType == FlightType::INTERNATIONAL_ARRIVAL) {
             phase = FlightPhase::HOLDING; // if its arriving, start phase is holding
-            speed = 400 + rand() % 201;  // 400 - 600 random time
-            altitude = 6000; 
+            speed = 500;
+            altitude = flightPhases[FlightPhase::HOLDING].altitudeLowerLimit+200;
             fuelLevel = 1000; //assuming 1 gallon/s
         }
         else {
@@ -174,25 +173,6 @@ public:
         }
         else {
             priority = 10;
-        }
-
-        switch(flightType){
-            case FlightType::INTERNATIONAL_ARRIVAL:
-                this->direction = 'N';
-                //this->priority += 10;
-                break;
-            case FlightType::DOMESTIC_ARRIVAL:
-                this->direction='S';
-                //this->priority += 5;
-                break;
-            case FlightType::INTERNATIONAL_DEPARTURE:
-                this->direction='E';
-                //this->priority += 15;
-                break;
-            case FlightType::DOMESTIC_DEPARTURE:
-                this->direction='W';
-                //this->priority += 20;
-                break;     
         }
 
     }
@@ -260,7 +240,7 @@ public:
         return this->id < other.id;                       // FCFS    
     }
 
-        int simulateFlightDeparture() {                                        
+    int simulateFlightDeparture() {                                        
     
         printf("DEPARTURE: flight ID: %d\n",this->id);
     
@@ -269,155 +249,149 @@ public:
         // START TAXI (0->(15-30))
         float distanceToRunway = TERMINAL_TO_RUNWAY_LEN;
         this->phase = FlightPhase::TAXI;
-        while (this->speed<15 && distanceToRunway>0.05){
+        while (this->speed<15 && distanceToRunway>0.01){
             this->speed += 2 + (rand()%50)/10.0; //speed up by 2 - 2.5km/s
             distanceToRunway -= this->speed/3600; //s=vt
             this->consumeFuel();
-            //printf("Flight : %d Distance to Runway= %f. Speed=%f\n", flight->id, distanceToRunway,flight->speed);
-            //sleep(1);
+            printf("Flight : %d Distance to Runway= %f. Speed=%f\n", this->id, distanceToRunway,this->speed);
             if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
                 return 0; //exit w/ unfinished status
             }
-            usleep(1000);
+            sleep(1);
+            //usleep(1000);
         }
         // KEEP TAXIING UNTIL NEAR RUNWAY
-        while (distanceToRunway>0.05){
+        while (distanceToRunway>0.001){
             this->speed += (5-rand()%10)/10.0; //vary by ~0.5
             distanceToRunway -= this->speed/3600; //s=vt
             this->consumeFuel();
-            //printf("Flight : %d Distance to Runway= %f. Speed=%f\n", flight->id, distanceToRunway,flight->speed);
+            printf("Flight : %d Distance to Runway= %f. Speed=%f\n", this->id, distanceToRunway,this->speed);
             if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
                 return 0; //exit w/ unfinished status
             }
-            usleep(1000);
+            sleep(1);
+            //usleep(1000);
         }
         // TAXI->STOP before takeoff pause
         while(this->speed>0){
-            //int a = -2500 + (500-rand()%1000);
-            //flight->speed += a/3600.0; //v=u+at
             this->speed -= 5; //decelerate by 5km/s^2
             distanceToRunway -= this->speed/3600; //s=vt
             if (this->speed<0)
                 this->speed=0;
-            //distanceToRunway -= flight->speed/3600.0 + 0.5*a*pow((1.0/3600),2); //ut+1/2at^2
             this->consumeFuel();
-            //printf("Flight : %d Distance to Runway= %f. Speed=%f\n",flight->id,distanceToRunway, flight->speed);
-            //sleep(1);
-            pthread_testcancel(); // safe cancellation point
-            usleep(1000);
+            printf("Flight : %d Distance to Runway= %f. Speed=%f\n",this->id,distanceToRunway, this->speed);
+            sleep(1);
+            //usleep(1000);
         }
         //printf("Flight : %d Stopped at runway dist=%f, prepare to takeoff\n",flight->id, distanceToRunway); //ye submit krna h??? its wirtten in milestone 2 and class to nhi h 
         // TAKEOFF from standstill
         this->phase = FlightPhase::TAKEOFF;
         float distanceAlongRunway = RUNWAY_LEN + distanceToRunway;
         while (distanceAlongRunway > 0.01 ){ //while runway left
-            int a = 14050 + (1000-rand()%2000);
+            int a = 65050 + (1000-rand()%2000);
             this->speed += a/3600.0; //v=u+at
             distanceAlongRunway -= this->speed/3600.0 + 0.5*a*pow((1.0/3600),2); //ut+1/2at^2
             this->consumeFuel();
-            //printf("Flight : %d takeoff, speed=%f, altitude=%f, dist=%f\n",flight->id, flight->speed,flight->altitude,distanceAlongRunway);
-            //sleep(1);
-            usleep(1000);
+            printf("Flight : %d takeoff, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceAlongRunway);
+            sleep(1);
+            //usleep(1000);
         }
         //printf("Flight : %d Takeoff at dist remaining=%f\n", flight->id, distanceAlongRunway);
         // CLIMB
         this->phase = FlightPhase::CLIMB;
         while (this->speed < 800){
-            int a = 9000 + (500-rand()%1000);
+            int a = 60000 + (500-rand()%1000);
             this->speed += a*(1.0/3600); //v=u+at
             this->altitude += 3280* (this->speed*sin(M_PI/12)*(1.0/3600) + 0.5*(a*sin(M_PI/12))*pow((1.0/3600),2));//ut+1/2at^2
             this->consumeFuel();
-            //printf("Flight : %d climb, speed=%f, altitude=%f\n", flight->id,flight->speed,flight->altitude);
-            //sleep(1);
-            usleep(1000);
+            printf("Flight : %d climb, speed=%f, altitude=%f\n", this->id,this->speed,this->altitude);
+            sleep(1);
+            //usleep(1000);
         }
         //CRUISE for a bit (bring to correct altitude) until out of airspace
         this->phase=FlightPhase::CRUISE;
         float cruisingAltitude = (flightPhases[FlightPhase::CRUISE].altitudeLowerLimit + flightPhases[FlightPhase::CRUISE].altitudeUpperLimit)/2.0;
         while (this->altitude < cruisingAltitude){
-            int a = 5000 + (500-rand()%1000);
+            int a = 25000 + (500-rand()%1000);
             this->speed += a/3600.0; //v=u+at
-            this->altitude += 3280 *(this->speed*sin(M_PI/12)*(1.0/3600) + 0.5*(a*sin(M_PI/12))*pow((1.0/3600),2));//ut+1/2at^2
-            usleep(1000);
+            this->altitude += 200;
             this->consumeFuel();
-            //printf("Flight : %d cruise, speed=%f, altitude=%f\n", flight->id, flight->speed,flight->altitude);
-            //flight->printStatus();
+            sleep(1);
+            //usleep(1000);
+            //printf("Flight : %d cruise, speed=%f, altitude=%f\n", this->id, this->speed,this->altitude);
         }
         this->phase=FlightPhase::CRUISE;
         printf("Flight %d exiting..\n",this->id);
         return 1; //return w/ finished status
-        //rwyB.releaseRunway();
 
     }
 
     int simulateFlightArrival(){  
     
         printf(" ARRIVAL :flight ID: %d\n",this->id);
-        //rwyA.acquireRunway(flight,qf);
     
         // ------------- SIMULATE --------------
     
-        float distanceToRunway = 15; //for a safe-ish descent (50ft/s)
-    
+        float distanceToRunway = 3.5; //for a safe-ish descent (50ft/s)
+        
         //bring flight from HOLDING->APPROACH to avoid violation
         while(this->speed > 292){
-            this->speed -= 2 + (1-rand()%2); //~1.5-2.5
+            this->speed -= 20 + (1-rand()%2); //~1.5-2.5
             distanceToRunway -= this->speed*(1.0/3600);
-            this->altitude -= 30; //safe (if 1km away its 107ft/s which would kill everyone i fear)
+            this->altitude -= 40; //safe (if 1km away its 107ft/s which would kill everyone i fear)
             this->consumeFuel();
-            //printf("flight %d : holding->approach, speed=%f, altitude=%f, dist=%f\n", this->id, this->speed,this->altitude,distanceToRunway);
-            //sleep(1);
+            printf("flight %d : holding->approach, speed=%f, altitude=%f, dist=%f\n", this->id, this->speed,this->altitude,distanceToRunway);
             if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
                 return 0; //exit w/ unfinished status
             }
-            usleep(1000);
+            sleep(1);
+            //usleep(1000);
         }
         //APPROACH
         this->phase = FlightPhase::APPROACH;
         while(this->speed>242.5){
-            this->speed += -8000*(1.0/3600); //v=u+at
+            this->speed += -5000*(1.0/3600); //v=u+at
             distanceToRunway -= this->speed * (1.0/3600); 
-            this->altitude -= 40;   
+            this->altitude -= 50;   
             this->consumeFuel();
-            //printf("flight %d : approach, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceToRunway);
-            //sleep(1);
+            printf("flight %d : approach, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceToRunway);
             if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
                 return 0;
             }
-            usleep(1000);
+            sleep(1);
+            //usleep(1000);
         }
         //LANDING
         this->phase = FlightPhase::LANDING;
         float distanceAlongRunway = distanceToRunway+RUNWAY_LEN; 
         while (this->speed > 30 || this->altitude>0){
-            float a = -9750 + (50-rand()%100);
+            float a = -30750 + (50-rand()%100);
             this->speed += a*(1.0/3600); //v=u+at
             distanceAlongRunway -= this->speed/3600.0 + 0.5*a*pow((1.0/3600),2); //ut+1/2at^2
             if (this->altitude>0){
-                this->altitude -= 60;
+                this->altitude -= 30;
                 if (this->altitude<0)
                     this->altitude=0;
             }
             this->consumeFuel();
-            //printf("flight %d : landing, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceAlongRunway);
-            //sleep(1);
-            usleep(1000);
+            printf("flight %d : landing, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceAlongRunway);
+            sleep(1);
+            //usleep(1000);
         }
             
         //TAXI
         this->phase = FlightPhase::TAXI;
         float distanceToGate = distanceAlongRunway+TERMINAL_TO_RUNWAY_LEN;
-        while (distanceToGate>0.05){
+        while (distanceToGate>0.1){
             if (this->speed<28)
                 this->speed += (50-rand()%100)/100.0;//fluctuate by ~0.5
             else
                 this->speed -= 0.5;
-            //distanceToGate -= flight->speed/3600.0 + 0.5*-1000*pow((1.0/3600),2); //ut+1/2at^2
             distanceToGate -= this->speed*(1.0/3600);
             this->consumeFuel();
-            //printf("flight %d : taxi, speed=%f, dist=%f\n",this->id, this->speed,distanceToGate);
-            //sleep(1);
-            usleep(1000);
+            printf("flight %d : taxi, speed=%f, dist=%f\n",this->id, this->speed,distanceToGate);
+            sleep(1);
+            //usleep(1000);
         }
         //TAXI->GATE 
         while(this->speed>0){
@@ -426,16 +400,14 @@ public:
             if (this->speed<0)
                 this->speed=0;
             distanceToGate -= this->speed*(1.0/3600);
-            //distanceToGate -= flight->speed/3600.0 + 0.5*-1125*pow((1.0/3600),2); //ut+1/2at^2
             this->consumeFuel();
-            //printf("flight %d : taxi->gate, speed=%f, dist=%f\n",this->id, this->speed,distanceToGate);
-            //sleep(1);
-            usleep(1000);
+            printf("flight %d : taxi->gate, speed=%f, dist=%f\n",this->id, this->speed,distanceToGate);
+            sleep(1);
+            //usleep(1000);
         }
         this->phase = FlightPhase::GATE;
-            
-        //rwyA.releaseRunway();
-    
+                
+                    
         printf("Flight %d exiting..\n",this->id);
 
         return 1; //exit w/ finished status
@@ -450,23 +422,24 @@ public:
     
     // Helper to sort a vector based on Comparator
     void sortQueue() {
-        //std::sort(flights.begin(), flights.end(), Comparator());
-        //std::sort(flightQueue.begin(), flightQueue.end());
         std::sort(flightQueue.begin(), flightQueue.end(), [](Flight* a, Flight* b) {
             if (a->priority != b->priority)
                 return a->priority > b->priority; // Higher priority = comes first
             return a->id < b->id; // FCFS if same priority
         });
     }
+    void sortQueue2() {
+        std::sort(flightQueue.begin(), flightQueue.end(), [](Flight* a, Flight* b) {
+            return a->scheduledTime < b->scheduledTime; // earlier time comes first
+        });
+    }
+
     void addFlight(Flight*& flight) {
+        printf("added flight %d\n",flight->id);
         flightQueue.push_back(flight);
-        //sortQueue(flightQueue); // Keep it sorted after every insertion
-        //printf("Flight %d added to Q\n",flight->id);
     }
     void addFlightAtFront(Flight*& flight){
         flightQueue.insert(flightQueue.begin(), flight);
-        //sortQueue(flightQueue); // Keep it sorted after every insertion
-        //printf("Flight %d added to front in Q\n",flight->id);
     }
     Flight* getNextFlight(){
         if (!flightQueue.empty()){
@@ -498,84 +471,24 @@ public:
 class Runway {
 private:
     pthread_mutex_t lock;
-    //pthread_cond_t cond;
 public:
     char runwayID;
-    //char priorityDirection;
-    //int waitingLowPriority;
-    //int waitingHighPriority;
-    //bool busy;
-    //Flight* currentFlight;
 
     Runway(char id) : runwayID(id) {
         pthread_mutex_init(&lock, nullptr);
-        //pthread_cond_init(&cond, nullptr);
-        //busy = false;
-        //currentFlight = nullptr;
     }
 
     ~Runway() {
         pthread_mutex_destroy(&lock);
-        //pthread_cond_destroy(&cond);
     }
-/*
-    void preemptRunway(Flight* flight,QueueFlights*& qf){
-        //send current back to queue, cancel thread and acquire runway
-        pthread_mutex_unlock(&lock);
-        currentFlight->rerouteFlight();
-        //terminateRadar() 
 
-        qf->addFlight(currentFlight);
-        printf("Flight %d pre-empt runway from flight %d\n",flight->id,currentFlight->id);
-        pthread_mutex_lock(&lock);
-        currentFlight = flight;
-        return;
-    }
-*/
     void acquireRunway(){
         //printf("try to acquire runway %c\n",this->runwayID);
         pthread_mutex_lock(&lock);
         //printf("acquired runway %c\n",this->runwayID);
     }
-/*
-    void acquireRunway2(Flight* flight,QueueFlights*& qf){//for now its just for arrival
-        printf("Flight %d wants runway access\n",flight->id);
-        if (currentFlight==nullptr){ //if available, acquire
-            pthread_mutex_lock(&lock);
-            currentFlight = flight;
-            printf("Flight %d acquire runway %c\n",flight->id, runwayID);
-            return;
-        }
-        else{
-            //printf("can i pre-empt?\n");
-            //compare priorities and if pre-emptable phase
-            if (flight->isArrival() && currentFlight->isArrival()){ //arrivals 
-                if (*flight<*currentFlight && currentFlight->phase<FlightPhase::LANDING){//higher priority and not on ground
-                    preemptRunway(flight,qf);
-                    return;
-                }
-            }
-            else if (flight->isDeparture() && currentFlight->isDeparture()){//departures
-                if (*flight<*currentFlight && currentFlight->phase<FlightPhase::TAKEOFF){//higher priority and not on ground
-                    preemptRunway(flight,qf);
-                    return;
-                }
-            }
-        }
-        //cannot acquire,wait
-        printf("Flight %d waiting for runway\n",flight->id);
-        pthread_mutex_lock(&lock);
-        currentFlight = flight;
-        printf("Flight %d acquire runway %c\n",flight->id, this->runwayID);
-        return;
-    }
-*/
-
     void releaseRunway(){
-        //printf("Flight %d released runway %c\n",currentFlight->id, this->runwayID);
         pthread_mutex_unlock(&lock);
-        //printf("lock released\n");
-        //currentFlight = nullptr;
     }
 
    
@@ -633,8 +546,6 @@ Runway rwyB('B');
 Runway rwyC('C');
 
 
-
-
 class Timer{
 public:
     static int currentTime;
@@ -686,24 +597,14 @@ public:
                 AVN avn(flight->id, flight->speed, amount, phase); 
                 avn.printAVN();
 
-                //printf("Before update violation[%d]=%d\n",phaseIndex,violation[phaseIndex]);
                 violation[phaseIndex]=true;
-                //printf("After update violation[%d]=%d\n",phaseIndex,violation[phaseIndex]);
             }
-
-            //flight->printStatus();
-            //sleep(1);
-            usleep(1000);
+            sleep(1);
+            //usleep(1000);
         }
         pthread_exit(nullptr);
     }
-    void terminateRadar(){
-        pthread_cancel(this->thread_id);
-        pthread_join(this->thread_id, nullptr);
-        this->thread_id = -1;
-        //printf("Cancelling radar for flight %d\n",flight->id);
-        //flight=nullptr;
-    }
+
 };
 
 
@@ -793,16 +694,13 @@ class Dispatcher{
 public:
     Radar radar;
 
-    //int numFlightsDispatched;
     pthread_mutex_t turnLock;
     pthread_cond_t cond;
     char runway;
 
     static pthread_t flightTid[TOTAL_FLIGHTS]; //all flight thread ids
     static pthread_t radarTid[TOTAL_FLIGHTS]; //all radar thread ids
-    //static int flightsRemainingPerAirline[NUM_AIRLINE];
     
-    //vector<flight*> flights;
     //for all simulation flights 
     QueueFlights* internationalFlights;
     QueueFlights* domesticFlights;
@@ -820,6 +718,10 @@ public:
     static void* dispatchFlights(void* arg) {
 
         Dispatcher* dispatcher = (Dispatcher*)(arg);
+
+        dispatcher->internationalFlights->sortQueue2();
+        dispatcher->domesticFlights->sortQueue2();
+        
         QueueFlights* internationalFlightsQueue = dispatcher->internationalFlights;
         QueueFlights* domesticFlightsQueue = dispatcher->domesticFlights;
         QueueFlights* internationalWaitingQueue = dispatcher->internationalWaitingQueue; 
@@ -862,42 +764,53 @@ public:
 
         // START AIR TRAFFIC CONTROL OF ALL FLIGHTS BY FCFS/PRIORITY
         while ( !internationalFlightsQueue->isEmpty() || !domesticFlightsQueue->isEmpty() || !domesticWaitingQueue->isEmpty() || !internationalWaitingQueue->isEmpty()/*&& Timer::currentTime < SIMULATION_DURATION*/) {
-            //cout<<"LOOP: "<<x++<<endl;
-        /*
-            if (!internationalFlightsQueue->isEmpty())
-                printf("interntainal not empty\n");
-            if (!internationalWaitingQueue->isEmpty())
-                printf("interntainal wait not empty\n");
-            if (!domesticFlightsQueue->isEmpty())
-                printf("domestic not empty\n");
-            if (!domesticWaitingQueue->isEmpty())
-                printf("domestic wait not empty\n");
-        */
 
-            internationalFlightsQueue->sortQueue();
-            domesticFlightsQueue->sortQueue();
-            //dispatch the front (highest priority flight)
-            Flight* currentInternational = internationalFlightsQueue->getNextFlight();
-            Flight* currentDomestic= domesticFlightsQueue->getNextFlight();
+            //dispatch the front (FCFS) if time for it 
+            Flight* readyInternational = nullptr;
+            Flight* readyDomestic = nullptr;
             
             if (dispatcher->runway == 'A' || dispatcher->runway == 'C'){
-                if (Timer::currentTime % 120 == 0 && currentInternational && currentInternational->isArrival()){ //move an international arrival to waiting Q
-                    internationalWaitingQueue->addFlight(currentInternational);
+                if (Timer::currentTime % 120 == 0 && !internationalFlightsQueue->isEmpty()){ //move an international arrival to waiting Q
+                    readyInternational = internationalFlightsQueue->getNextFlight();
+                    if (readyInternational->isArrival()){
+                        internationalWaitingQueue->addFlight(readyInternational); //add to waiting
+                        printf("time for flight %d\n",readyInternational->id);
+                    }
+                    else
+                        internationalFlightsQueue->addFlightAtFront(readyInternational); //add back (C)
                 }
-                if (Timer::currentTime % 180 == 0 && currentDomestic && currentDomestic->isArrival()){ //move a domestic arrival to waiting Q
-                    domesticWaitingQueue->addFlight(currentDomestic);
+                if (Timer::currentTime % 180 == 0 && !domesticFlightsQueue->isEmpty()){ //move a domestic arrival to waiting Q
+                    readyDomestic = domesticFlightsQueue->getNextFlight();
+                    if (readyDomestic->isArrival()){
+                        printf("time for flight %d\n",readyDomestic->id);
+                        domesticWaitingQueue->addFlight(readyDomestic);
+                    }
+                    else
+                        domesticFlightsQueue->addFlightAtFront(readyDomestic);
                 }
             }
-            if (dispatcher->runway == 'B' || dispatcher->runway == 'C'){
-                if (Timer::currentTime % 150 == 0 && currentInternational && currentInternational->isDeparture()){ //move a international departure to waiting Q
-                     internationalWaitingQueue->addFlight(currentInternational);
+            else if (dispatcher->runway == 'B'){
+                if (Timer::currentTime % 150 == 0 && !internationalFlightsQueue->isEmpty()){ //move a international departure to waiting Q
+                    readyInternational = internationalFlightsQueue->getNextFlight();
+                    if (readyInternational->isDeparture()){
+                        printf("time for flight %d\n",readyInternational->id);
+                        internationalWaitingQueue->addFlight(readyInternational); //add to waiting
+                    }
+                    else
+                        internationalFlightsQueue->addFlightAtFront(readyInternational); //add back (C)
                 }
-                if (Timer::currentTime % 240 == 0 && currentDomestic && currentDomestic->isDeparture()){ //move a domestic departure to waiting Q
-                    domesticWaitingQueue->addFlight(currentDomestic);
+                if (Timer::currentTime % 240 == 0 && !domesticFlightsQueue->isEmpty()){ //move a domestic departure to waiting Q
+                    readyDomestic = domesticFlightsQueue->getNextFlight();
+                    if (readyDomestic->isDeparture()){
+                        domesticWaitingQueue->addFlight(readyDomestic);
+                        printf("time for flight %d\n",readyInternational->id);
+                    }
+                    else
+                        domesticFlightsQueue->addFlightAtFront(readyDomestic);                
                 }
             }
 
-            //sort the waitingQs
+            //sort the waiting Qs to choose priority flights
             internationalWaitingQueue->sortQueue();
             domesticWaitingQueue->sortQueue();
 
@@ -927,15 +840,6 @@ public:
                 nextFlight = nextInternational;
             else if (nextDomestic && !nextInternational)
                 nextFlight = nextDomestic;
-        /*
-            if (nextFlight)
-                std::cout << "NEXT FLIGHT " << nextFlight->id << std::endl;
-            else
-                std::cout << "No next flight selected." << std::endl;
-        */
-
-            // if the runway is free just .front() is current
-            // else .front() is comapred w/ current to see if can prempt
 
             // check if anyone currently running do we pre-empt
             if (nextFlight != nullptr) {
@@ -1016,7 +920,7 @@ public:
                 }
                 nextFlight = nullptr;
             }
-            if (currentFlight->phase == FlightPhase::DONE){ //its done
+            if (currentFlight && currentFlight->phase == FlightPhase::DONE){ //its done
                 flightTurn[currentFlightID-1]=false;
                 currentFlightID = -1;
                 free(currentFlight);
@@ -1033,15 +937,67 @@ public:
         pthread_exit(nullptr);
     }
 
-
 };
-
 pthread_t Dispatcher::flightTid[TOTAL_FLIGHTS];
 pthread_t Dispatcher::radarTid[TOTAL_FLIGHTS];
-/*
-bool flightTurn[TOTAL_FLIGHTS]={false};t Dispatcher::flightsRemainingPerAirline[NUM_AIRLINE] = {4, 4, 2, 1, 2, 1};
-*/
 
+FlightType getFlightType(char dir){
+     dir = toupper(dir); // Normalize
+
+    while(dir != 'N' && dir != 'S' && dir != 'E' && dir !='W'){
+        cout << "Invalid Direction!\nEnter Again (N/S/E/W): ";
+        cin.clear();                 // clear error flags
+        cin.ignore(10000, '\n');     // discard bad input
+        cin >> dir;
+        dir = toupper(dir);          // normalize again
+    }
+
+    if (dir == 'N') return FlightType::INTERNATIONAL_ARRIVAL;
+    if (dir == 'E') return FlightType::INTERNATIONAL_DEPARTURE;
+    if (dir == 'S') return FlightType::DOMESTIC_ARRIVAL;
+    return FlightType::DOMESTIC_DEPARTURE;  // must be 'W'
+}
+AirlineName getAirlineName(int name){
+    while(name <1 || name >6){
+        cout<<"Invalid Name!\nEnter Again: ";
+        cin>> name;
+    }
+    if( name == 1)
+            return AirlineName:: PIA;
+    else if( name==2)
+           return AirlineName:: AirBlue;
+    else if( name==3)
+            return AirlineName:: FedEx;
+    else if( name==4)
+            return AirlineName:: Pakistan_Airforce;
+    else if( name==5)
+            return AirlineName:: Blue_Dart;
+    else 
+        return AirlineName:: AghaKhan_Air_Ambulance;
+}
+
+AirlineType getAirtype(int type){
+    while(type <1 || type >4){
+        cout<<"Invalid Type!\nEnter Again: ";
+        cin>> type;
+    }
+    if( type == 1)
+            return AirlineType:: MEDICAL;
+    else if( type==2)
+           return AirlineType:: MILITARY;
+    else if( type==3)
+            return AirlineType:: CARGO;
+    else 
+        return AirlineType:: COMMERCIAL;
+}
+
+int checkTime(float time){
+    while(time <0.00 || time >=24.00){
+        cout<<"Invalid Time!\nEnter again: ";
+        cin>> time;
+    }
+    return time;
+}
 int main() {
 
     srand(time(NULL));
@@ -1050,46 +1006,100 @@ int main() {
     // INPUT FLIGHTS
     QueueFlights* rwyAInternationalFlights = new QueueFlights;
     QueueFlights* rwyADomesticFlights = new QueueFlights;
+
     QueueFlights* rwyBInternationalFlights = new QueueFlights;
     QueueFlights* rwyBDomesticFlights = new QueueFlights;
+
     QueueFlights* rwyCInternationalFlights = new QueueFlights;
     QueueFlights* rwyCDomesticFlights = new QueueFlights;
 
+    //make dispatchers for 3 runways (A is for arrival, B for departure and C for cargo (dept and arr))
     Dispatcher rwyADispatcher('A',rwyADomesticFlights,rwyAInternationalFlights);
     Dispatcher rwyBDispatcher('B',rwyBDomesticFlights,rwyBInternationalFlights);
     Dispatcher rwyCDispatcher('C',rwyCDomesticFlights,rwyCInternationalFlights);
     
-    //should we have two ids? one we give(for indexing) and one they choose, or they just dont get to input that Dispatcher rwyCDispatcher('C');
-    
-    //input validation of airline?? military not PIA etc (later)
-    Flight* f1 = new Flight(1, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA);
-    Flight* f2 = new Flight(2, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: MILITARY, AirlineName::Pakistan_Airforce);
-    rwyADispatcher.internationalFlights->addFlight(f1);
-    rwyADispatcher.domesticFlights->addFlight(f2);
-     
-    Flight* f3 = new Flight(3, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: COMMERCIAL, AirlineName:: PIA);
-    Flight* f4 = new Flight(4, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: MEDICAL, AirlineName:: AghaKhan_Air_Ambulance);
-    rwyBDispatcher.internationalFlights->addFlight(f4);
-    rwyBDispatcher.domesticFlights->addFlight(f3);
+    cout<<"        Airline          |    Type        | Flights\n";
+    cout<<"---------------------------------------------------\n";
+    cout<<"PIA                      | Commercial     | 4\n";
+    cout<<"AirBlue                  | Commercial     | 4\n";
+    cout<<"FedEx                    | Cargo          | 2\n";
+    cout<<"Pakistan Airforce        | Military       | 1\n";
+    cout<<"Blue Dart                | Cargo          | 2\n";
+    cout<<"AghaKhan Air Ambulance   | Medical        | 1\n\n";
 
-    Flight* f5 = new Flight(5, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: CARGO, AirlineName:: FedEx);
-    Flight* f6 = new Flight(6, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: CARGO, AirlineName:: Blue_Dart);
-    //rwyADispatcher.internationalFlights->addFlight(f6);
-    //rwyADispatcher.internationalFlights->addFlight(f5);
-    rwyCDispatcher.domesticFlights->addFlight(f5);
-    rwyCDispatcher.internationalFlights->addFlight(f6);
+    cout<<"==================================================\n";
+    cout<<"1)PIA\n";
+    cout<<"2)AirBlue\n";
+    cout<<"3)FedEx\n";
+    cout<<"4)Pakistan Airforce\n";
+    cout<<"5)Blue Dart\n";
+    cout<<"6)AghaKhan Air Ambulance\n\n";
+
+    cout<<"==================================================\n";
+    cout<<"1)MEDICAL\n";
+    cout<<"2)MILITARY\n";
+    cout<<"3)CARGO\n";
+    cout<<"4)COMMERCIAL\n\n";
+
+    printf("Enter data for %d flights\n\n", TOTAL_FLIGHTS);
+
+    FlightType Ftype; AirlineType airtype; AirlineName name;
+    int id; char dir; int priority; int type; int airname; float scheduledTime;
+
+    Flight* f;
+
+    for(int i=0; i<TOTAL_FLIGHTS; i++){
+        cout<<"Flight Number | Airline Name (1-6) | Aircraft Type (1-4) | Direction  (N/S/E/W)| Priority | Scheduled Time (24 hr clock)\n";
+        cin>>id;
+        cin>> airname;
+        cin>> type;
+        cin>>dir;
+        cin>> priority;
+        cin>>scheduledTime;
+        scheduledTime= checkTime(scheduledTime);
+        Ftype= getFlightType(dir);
+        name= getAirlineName(airname);
+        airtype= getAirtype(type);
+        
+        f= new Flight(id, Ftype, airtype, name, scheduledTime, dir);
+
+        if(airtype == AirlineType:: CARGO){
+            if(Ftype== INTERNATIONAL_ARRIVAL || Ftype== INTERNATIONAL_DEPARTURE)
+                rwyCDispatcher.internationalFlights->addFlight(f);
+            else
+                rwyCDispatcher.domesticFlights->addFlight(f);
+        }
+        else if(f->isArrival()){
+            if(Ftype== INTERNATIONAL_ARRIVAL)
+                rwyADispatcher.internationalFlights->addFlight(f);
+            else
+                rwyADispatcher.domesticFlights->addFlight(f);
+        }
+        else if(f->isDeparture()){
+           if(Ftype== INTERNATIONAL_DEPARTURE)
+                rwyBDispatcher.internationalFlights->addFlight(f);
+            else
+                rwyBDispatcher.domesticFlights->addFlight(f);
+        }
+        f->printStatus();
+    }
 
     pthread_t dispatcherA;
-    pthread_t dispatcherB;// im fixing things and its still giving those errors when i run it like i didnt fix them
+    pthread_t dispatcherB;
     pthread_t dispatcherC;
 
+    Timer timer;
+    pthread_t timerThread;
+    
     pthread_create(&dispatcherA, nullptr, Dispatcher::dispatchFlights, (void*)&rwyADispatcher);   
-    pthread_create(&dispatcherB, nullptr, Dispatcher::dispatchFlights, (void*)&rwyBDispatcher);  // Pass dispatcher to the thread
-    pthread_create(&dispatcherC, nullptr, Dispatcher::dispatchFlights, (void*)&rwyCDispatcher);  // Pass dispatcher to the thread
-    /*pthread_join(dispatcherA,NULL);
-    pthread_join(dispatcherB,NULL);
-    pthread_join(dispatcherC,NULL);*/
+    pthread_create(&dispatcherB, nullptr, Dispatcher::dispatchFlights, (void*)&rwyBDispatcher);
+    pthread_create(&dispatcherC, nullptr, Dispatcher::dispatchFlights, (void*)&rwyCDispatcher);
 
-    pthread_exit(NULL);
+    pthread_create(&timerThread,NULL,timer.simulationTimer,NULL);
+
+    pthread_join(dispatcherA, NULL);
+    pthread_join(dispatcherB, NULL);
+    pthread_join(dispatcherC, NULL);
+    pthread_join(timerThread, NULL);
     return 0;
 }
