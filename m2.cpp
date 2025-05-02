@@ -5,6 +5,9 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <semaphore.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <ctime>
 #include <chrono>
 #include <cmath>
@@ -21,6 +24,10 @@ using namespace std;
 #define RUNWAY_LEN 0.6
 #define TERMINAL_TO_RUNWAY_LEN 0.03
 
+//FIFO
+#define AVN_FIFO1 "pipes/avnfifo_ATC"
+#define AVN_FIFO2 "pipes/avnfifo_GEN"
+
 
 // ENUMS
 enum AirlineType {
@@ -32,7 +39,6 @@ enum AirlineType {
     //lowest priority
 };
 
-//should we make these objects so they have type also 
 enum AirlineName {
     PIA,
     AirBlue,
@@ -209,14 +215,6 @@ public:
         printPhase(phase);
         std::cout << " | Fuel: " << fuelLevel
                 << " | Priority: " << priority << "\n";
-    }
-
-    //ADDED
-    void rerouteFlight(){
-        pthread_cancel(this->thread_id);
-        pthread_join(this->thread_id, nullptr);
-        this->thread_id = -1;
-        printf("Re-routing flight %d\n", this->id);
     }
 
     bool isArrival() const{
@@ -494,25 +492,62 @@ public:
    
 };
 
+/*
+struct ViolationInfo{
+    int flightID;
+    AirlineName airline;
+    AirlineType airlineType;
+    float speedRecorded;
+    FlightPhase phaseViolated;
+
+    ViolationInfo(){}
+    ViolationInfo(int flightID,AirlineName airline,AirlineType airlineType, float speedRecorded,FlightPhase phaseViolated)
+    : flightID(flightID),airline(airline),airlineType(airlineType),speedRecorded(speedRecorded),phaseViolated(phaseViolated) {}
+};
+*/
 
 // AVN (Violation Notice)
+struct ViolationInfo {
+    int flightID;
+    int airline;
+    int airlineType;
+    float speedRecorded;
+    int phaseViolation;
+    time_t violationTimestamp;
+    //long violationTimestamp;
+    //for AVN generator
+    float amountDue;
+    bool status;  // true= paid, false= unpaid
+
+    ViolationInfo(int flightID,int airline,int airlineType,float speedRecorded,int phaseViolation)
+    : flightID(flightID), airline(airline), airlineType(airlineType), speedRecorded(speedRecorded), phaseViolation(phaseViolation){
+        this->violationTimestamp = std::time(nullptr); //save current time
+        auto currentTime = std::chrono::system_clock::now();
+    }
+};
+
 class AVN {
 public:
     int flightID;
-    float amountDue;
-    bool status;  // true= paid, false= unpaid
+    AirlineName airline;
+    AirlineType airlineType;
     float speedRecorded;
     FlightPhase phaseViolation;
     time_t violationTimestamp;
+    //for AVN generator
+    float amountDue;
+    bool status;  // true= paid, false= unpaid
     time_t dueDate;
 
-    AVN(int id, float sp, float amount, FlightPhase phase)
-        : flightID(id), amountDue(amount), status(false), speedRecorded(sp), phaseViolation(phase)
-    {
-        violationTimestamp = std::time(nullptr); //save current time
-        auto currentTime = std::chrono::system_clock::now();
-        auto futureTime = currentTime + std::chrono::hours(24 * 3); // add 3 days
+    AVN () {}
+
+    AVN(int flightID,AirlineName airline,AirlineType airlineType,float speedRecorded,FlightPhase phaseViolation,time_t violationTimestamp,float amountDue)
+    : flightID(flightID), airline(airline), airlineType(airlineType), speedRecorded(speedRecorded), phaseViolation(phaseViolation),violationTimestamp(violationTimestamp),amountDue(amountDue){
+        //due date
+        std::chrono::system_clock::time_point tp = std::chrono::system_clock::from_time_t(violationTimestamp);
+        auto futureTime = tp + std::chrono::hours(24 * 3); // add 3 days
         dueDate = std::chrono::system_clock::to_time_t(futureTime);
+
     }
 
     void printAVN() {
@@ -521,22 +556,43 @@ public:
         std::cout << "> Speed: " << speedRecorded<<" km/h\n";
         std::cout << "> Phase: ";
         printPhase(phaseViolation);
-        std::cout << "\n> Due: " << ctime(&dueDate)<<std::endl;
+        std::cout << "\n> Timestamp: " << ctime(&violationTimestamp);
+        std::cout << "> Amount: $" << amountDue << std::endl;
+        std::cout << "> Due: " << ctime(&dueDate)<<std::endl;
     }
 };
+
 class ATCDashboard {
     public:
         int numViolations;
-        std::vector<std::vector<int>> avns;
+        std::vector<AVN> AVNs;
     
         ATCDashboard(){
             this->numViolations=0;
         }
+        
+        void requestAVN(Flight* requestingFlight){
+            //send to AVN generator to generate AVN
+            //send id, airline name,airline type, recorded speed, phase
+            printf("Request AVN\n");
+            ViolationInfo* violation = new ViolationInfo(requestingFlight->id,static_cast<int>(requestingFlight->airlineName),static_cast<int>(requestingFlight->airlineType),requestingFlight->speed,static_cast<int>(requestingFlight->phase));
+            int fd = open(AVN_FIFO1,O_WRONLY,0666);
+            write(fd,(void*)violation,sizeof(ViolationInfo));
+            close(fd);
     
-        void addViolation() {
-            //For milestone 2/3 graphics
-            // Simulate FIFO/pipe listening
-            // Add AVN violation
+            //get back fee info
+            fd = open(AVN_FIFO2,O_RDONLY,0666);
+            read(fd,(void*)violation,sizeof(ViolationInfo));
+            close(fd);
+    
+            //write
+            AVNs.push_back(AVN(violation->flightID,static_cast<AirlineName>(violation->airline),static_cast<AirlineType>(violation->airlineType),violation->speedRecorded,static_cast<FlightPhase>(violation->phaseViolation),violation->violationTimestamp,violation->amountDue));
+        }
+
+        void printAVNs(){
+            for (int i=0; i<AVNs.size(); i++){
+                AVNs[i].printAVN();
+            }
         }
 };
 
@@ -570,6 +626,7 @@ int Timer::currentTime = 0;
 class Radar{
 public:
     pthread_t thread_id;
+    static ATCDashboard dashboard; //shared
 
     Radar():thread_id(-1){}
     //radar thread function (per flight)
@@ -579,23 +636,14 @@ public:
         bool violation[NUM_FLIGHT_PHASES]={false};
 
         
-       while(flight && flight->phase!=FlightPhase::DONE){ //flight ongoing
+        while(flight && flight->phase!=FlightPhase::DONE){ //flight ongoing
             FlightPhase phase = flight->phase;
             int phaseIndex = static_cast<int>(phase);
-           //pthread_mutex_lock(&radarLock);
             if (flight->checkViolation() && violation[phaseIndex]==false) {//if first violation of phase
-                int amount=0;
-                //generate AVN
-                if(flight->airlineType == AirlineType:: COMMERCIAL){
-                amount= 500000;
-                amount+= 0.15*amount;
-                }
-                else if (flight->airlineType == AirlineType:: CARGO){
-                amount= 700000;
-                amount+= 0.15*amount;
-                }
-                AVN avn(flight->id, flight->speed, amount, phase); 
-                avn.printAVN();
+                
+                dashboard.requestAVN(flight);
+                printf("recived\n");
+                dashboard.printAVNs();
 
                 violation[phaseIndex]=true;
             }
@@ -604,8 +652,9 @@ public:
         }
         pthread_exit(nullptr);
     }
-
 };
+ATCDashboard Radar::dashboard;
+
 
 
 struct args{
@@ -1002,6 +1051,7 @@ int main() {
 
     srand(time(NULL));
     initializeFlightPhases();
+ 
 
     // INPUT FLIGHTS
     QueueFlights* rwyAInternationalFlights = new QueueFlights;
@@ -1018,6 +1068,7 @@ int main() {
     Dispatcher rwyBDispatcher('B',rwyBDomesticFlights,rwyBInternationalFlights);
     Dispatcher rwyCDispatcher('C',rwyCDomesticFlights,rwyCInternationalFlights);
     
+    /*
     cout<<"        Airline          |    Type        | Flights\n";
     cout<<"---------------------------------------------------\n";
     cout<<"PIA                      | Commercial     | 4\n";
@@ -1083,6 +1134,7 @@ int main() {
         }
         f->printStatus();
     }
+    */
 
     pthread_t dispatcherA;
     pthread_t dispatcherB;
@@ -1090,16 +1142,20 @@ int main() {
 
     Timer timer;
     pthread_t timerThread;
-    
-    pthread_create(&dispatcherA, nullptr, Dispatcher::dispatchFlights, (void*)&rwyADispatcher);   
-    pthread_create(&dispatcherB, nullptr, Dispatcher::dispatchFlights, (void*)&rwyBDispatcher);
-    pthread_create(&dispatcherC, nullptr, Dispatcher::dispatchFlights, (void*)&rwyCDispatcher);
 
+    Flight* f1 = new Flight(1, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA,12.0,'N');
+    rwyADispatcher.internationalFlights->addFlight(f1);
+
+    pthread_create(&dispatcherA, nullptr, Dispatcher::dispatchFlights, (void*)&rwyADispatcher);   
+    //pthread_create(&dispatcherB, nullptr, Dispatcher::dispatchFlights, (void*)&rwyBDispatcher);
+    //pthread_create(&dispatcherC, nullptr, Dispatcher::dispatchFlights, (void*)&rwyCDispatcher);
+
+    sleep(1);
     pthread_create(&timerThread,NULL,timer.simulationTimer,NULL);
 
     pthread_join(dispatcherA, NULL);
-    pthread_join(dispatcherB, NULL);
-    pthread_join(dispatcherC, NULL);
+    //pthread_join(dispatcherB, NULL);
+    //pthread_join(dispatcherC, NULL);
     pthread_join(timerThread, NULL);
     return 0;
 }
