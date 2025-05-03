@@ -26,6 +26,7 @@ void* simulateWaitingAtGate(void* arg){
     Flight* flight = flightArg->flight;
     const char runwayToAcquire = flightArg->runway;
 
+    int status = 0;
     while (1){
         //flight will wait at gate stationary until runway clears
         flight->phase = FlightPhase::GATE;
@@ -43,7 +44,11 @@ void* simulateWaitingAtGate(void* arg){
         else
             rwyB.acquireRunway();
 
-        int status = flight->simulateFlightDeparture(flightTurn);
+        if (flight->isInternational())
+            status = flight->simulateInternationalFlightDeparture(flightTurn);
+        else
+            status = flight->simulateDomesticFlightDeparture(flightTurn);
+
 
         if (runwayToAcquire=='C')
             rwyC.releaseRunway();
@@ -64,6 +69,8 @@ void* simulateWaitingInHolding(void* arg){
     Flight* flight = flightArg->flight;
     const char runwayToAcquire = flightArg->runway;
     cout<<"IN holding flight: "<< flight->id<<endl;
+
+    int status =0;
     while (1){
         //keep holding around airport until its your turn
 
@@ -82,7 +89,11 @@ void* simulateWaitingInHolding(void* arg){
         else
             rwyA.acquireRunway();
 
-        int status = flight->simulateFlightArrival(flightTurn);
+        if (flight->isInternational())
+            status = flight->simulateInternationalFlightArrival(flightTurn);
+        else
+            status = flight->simulateDomesticFlightArrival(flightTurn);
+
     
         if (runwayToAcquire=='C')
             rwyC.releaseRunway();
@@ -413,7 +424,7 @@ int checkTime(float time){
 int main() {
 
     srand(time(NULL));
- 
+    loadFont();
 
     // INPUT FLIGHTS
     QueueFlights* rwyAInternationalFlights = new QueueFlights;
@@ -498,6 +509,7 @@ int main() {
     }
     */
 
+
     pthread_t dispatcherA;
     pthread_t dispatcherB;
     pthread_t dispatcherC;
@@ -505,18 +517,40 @@ int main() {
     Timer timer;
     pthread_t timerThread;
 
-    Flight* f1 = new Flight(1, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA,12.0,'N');
+    Flight* f1 = new Flight(1, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA,12.0,'S');
     rwyADispatcher.internationalFlights->addFlight(f1);
 
-    Flight* f3 = new Flight(3, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: COMMERCIAL, AirlineName:: PIA,12.15,'W');
+    Flight* f3 = new Flight(3, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: COMMERCIAL, AirlineName:: PIA,12.15,'E');
     rwyBDispatcher.domesticFlights->addFlight(f3);
 
     pthread_create(&dispatcherA, nullptr, Dispatcher::dispatchFlights, (void*)&rwyADispatcher);   
-    pthread_create(&dispatcherB, nullptr, Dispatcher::dispatchFlights, (void*)&rwyBDispatcher);
+    //pthread_create(&dispatcherB, nullptr, Dispatcher::dispatchFlights, (void*)&rwyBDispatcher);
     //pthread_create(&dispatcherC, nullptr, Dispatcher::dispatchFlights, (void*)&rwyCDispatcher);
 
     sleep(1);
     pthread_create(&timerThread,NULL,timer.simulationTimer,NULL);
+
+    //start graphics window
+    sf::RenderWindow window(sf::VideoMode(960, 600), "SFML Starter");
+    sf::Texture backgroundTexture;
+    if (!backgroundTexture.loadFromFile("background.png")) {
+        return -1;  // handle error
+    }
+    sf::Sprite backgroundSprite(backgroundTexture);
+    while (window.isOpen())
+    {
+        sf::Event event;
+        while (window.pollEvent(event))
+        {
+            if (event.type == sf::Event::Closed)
+                window.close();
+        }
+
+        window.clear();
+        window.draw(backgroundSprite);
+        f1->draw(window);
+        window.display();
+    }
 
     pthread_join(dispatcherA, NULL);
     //pthread_join(dispatcherB, NULL);

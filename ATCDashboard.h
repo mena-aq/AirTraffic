@@ -22,6 +22,7 @@ public:
         write(fd,(void*)violation,sizeof(ViolationInfo));
         close(fd);
 
+        printf("avn received\n");
         //get back fee info
         fd = open(AVN_FIFO2,O_RDONLY,0666);
         read(fd,(void*)violation,sizeof(ViolationInfo));

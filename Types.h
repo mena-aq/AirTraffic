@@ -4,18 +4,16 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <queue>
-#include <pthread.h>
 #include <unistd.h>
-#include <semaphore.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <ctime>
-#include <chrono>
 #include <cmath>
-#include <algorithm>
 using namespace std;
+
+//for graphics
+#include <SFML/Graphics.hpp>
+
 
 // ATC SYSTEM CONSTANTS 
 #define NUM_FLIGHT_PHASES 8
@@ -25,7 +23,7 @@ using namespace std;
 #define SIMULATION_DURATION 300
 //assume runways start at (0,0), so each quadrant is 3x3 km
 #define RUNWAY_LEN 0.6
-#define TERMINAL_TO_RUNWAY_LEN 0.03
+#define TERMINAL_TO_RUNWAY_LEN 0.045
 
 //FIFO
 #define AVN_FIFO1 "pipes/avnfifo_ATC"
@@ -101,7 +99,13 @@ void printAirlineType(AirlineType airlineytype) {
     }
 }
 
-
+//font
+sf::Font globalFont;
+inline void loadFont() {
+    if (!globalFont.loadFromFile("VT323.ttf")) {
+        std::cerr << "Error loading font VT323.ttf" << std::endl;
+    }
+}
 
 
 #endif

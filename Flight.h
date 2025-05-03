@@ -28,6 +28,12 @@ public:
     bool faulty;
     PhaseRules flightPhases;
 
+    float xPos;
+    float yPos;
+    sf::Texture texture;
+    sf::Sprite sprite;
+    sf::Text label;
+
 
     Flight(int id, FlightType flightType, AirlineType airlineType, AirlineName name,float st, char dir ) :  id(id), direction(dir), scheduledTime(st), thread_id(-1), radar_id(-1), airlineName(name), airlineType(airlineType), flightType(flightType), waitingTime(0), faulty(false){    
         
@@ -54,8 +60,39 @@ public:
             priority = 10;
         }
 
+        texture.loadFromFile("./flight.png");
+        sprite.setTexture(texture);
+        sprite.setScale(0.25f,0.25f);
+        sf::FloatRect bounds = sprite.getLocalBounds();
+        sprite.setOrigin(bounds.width / 2.f, bounds.height / 2.f);
+        if (this->direction == 'W'){
+            sprite.setRotation(-90.f);
+            this->xPos = 220;
+            this->yPos = 230;
+            updatePosition();
+        }
+        else if (this->direction == 'E'){
+            sprite.setRotation(90.f);
+            this->xPos = 750;
+            this->yPos = 200;
+            updatePosition();
+        }
+        else if (this->direction == 'N'){
+            this->xPos = 900;
+            this->yPos = 1100;
+            updatePosition();
+        }
+        else if (this->direction == 'S'){
+            sprite.setRotation(180.f);
+            this->xPos = 900;
+            this->yPos = -220;
+            updatePosition();
+        }
         
-
+        label.setFont(globalFont);
+        string lbl = "ID: " + to_string(this->id);
+        label.setString(lbl);
+        label.setCharacterSize(14);
     }
     bool checkViolation() {
         Phase p = flightPhases[(int)phase];
@@ -113,7 +150,9 @@ public:
         return this->id < other.id;                       // FCFS    
     }
 
-    int simulateFlightDeparture(bool flightTurn[]) {                                        
+    int simulateInternationalFlightDeparture(bool flightTurn[]) {   
+        
+        float step = 1; //-0.05 for domestic (runway dir wise)
     
         printf("DEPARTURE: flight ID: %d\n",this->id);
     
@@ -122,9 +161,11 @@ public:
         // START TAXI (0->(15-30))
         float distanceToRunway = TERMINAL_TO_RUNWAY_LEN;
         this->phase = FlightPhase::TAXI;
-        while (this->speed<15 && distanceToRunway>0.01){
+        while (this->speed<15 && xPos>165){
             this->speed += 2 + (rand()%50)/10.0; //speed up by 2 - 2.5km/s
             distanceToRunway -= this->speed/3600; //s=vt
+            this->xPos-= this->speed * step;
+            this->updatePosition();
             this->consumeFuel();
             printf("Flight : %d Distance to Runway= %f. Speed=%f\n", this->id, distanceToRunway,this->speed);
             if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
@@ -133,10 +174,13 @@ public:
             sleep(1);
             //usleep(1000);
         }
+        sprite.rotate(-90.f);
         // KEEP TAXIING UNTIL NEAR RUNWAY
-        while (distanceToRunway>0.001){
+        while (yPos<300){
             this->speed += (5-rand()%10)/10.0; //vary by ~0.5
             distanceToRunway -= this->speed/3600; //s=vt
+            this->yPos += this->speed * step;
+            this->updatePosition();
             this->consumeFuel();
             printf("Flight : %d Distance to Runway= %f. Speed=%f\n", this->id, distanceToRunway,this->speed);
             if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
@@ -152,17 +196,24 @@ public:
             if (this->speed<0)
                 this->speed=0;
             this->consumeFuel();
+            this->yPos += this->speed * step;
+            this->updatePosition();
             printf("Flight : %d Distance to Runway= %f. Speed=%f\n",this->id,distanceToRunway, this->speed);
             sleep(1);
             //usleep(1000);
         }
+        sprite.rotate(-90.f);
         //printf("Flight : %d Stopped at runway dist=%f, prepare to takeoff\n",flight->id, distanceToRunway); //ye submit krna h??? its wirtten in milestone 2 and class to nhi h 
         // TAKEOFF from standstill
+        step/=4;
         this->phase = FlightPhase::TAKEOFF;
         float distanceAlongRunway = RUNWAY_LEN + distanceToRunway;
-        while (distanceAlongRunway > 0.01 ){ //while runway left
+        while (xPos < 760){ //while runway left
             int a = 65050 + (1000-rand()%2000);
             this->speed += a/3600.0; //v=u+at
+            this->xPos += this->speed * step;
+            this->updatePosition();
+            this->spriteAltitudeUp();
             distanceAlongRunway -= this->speed/3600.0 + 0.5*a*pow((1.0/3600),2); //ut+1/2at^2
             this->consumeFuel();
             printf("Flight : %d takeoff, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceAlongRunway);
@@ -176,6 +227,113 @@ public:
             int a = 60000 + (500-rand()%1000);
             this->speed += a*(1.0/3600); //v=u+at
             this->altitude += 3280* (this->speed*sin(M_PI/12)*(1.0/3600) + 0.5*(a*sin(M_PI/12))*pow((1.0/3600),2));//ut+1/2at^2
+            this->xPos += this->speed * step;
+            this->updatePosition();
+            this->spriteAltitudeUp();
+            this->consumeFuel();
+            printf("Flight : %d climb, speed=%f, altitude=%f\n", this->id,this->speed,this->altitude);
+            sleep(1);
+            //usleep(1000);
+        }
+        //CRUISE for a bit (bring to correct altitude) until out of airspace
+        this->phase=FlightPhase::CRUISE;
+        float cruisingAltitude = (flightPhases[FlightPhase::CRUISE].altitudeLowerLimit + flightPhases[FlightPhase::CRUISE].altitudeUpperLimit)/2.0;
+        while (this->altitude < cruisingAltitude){
+            int a = 25000 + (500-rand()%1000);
+            this->speed += a/3600.0; //v=u+at
+            this->altitude += 200;
+            this->spriteAltitudeUp();
+            this->consumeFuel();
+            sleep(1);
+            //usleep(1000);
+            //printf("Flight : %d cruise, speed=%f, altitude=%f\n", this->id, this->speed,this->altitude);
+        }
+        this->phase=FlightPhase::CRUISE;
+        printf("Flight %d exiting..\n",this->id);
+        return 1; //return w/ finished status
+
+    }
+
+    int simulateDomesticFlightDeparture(bool flightTurn[]) {   
+        
+        float step = 1; 
+    
+        printf("DEPARTURE: flight ID: %d\n",this->id);
+    
+        // ------------- SIMULATE --------------
+    
+        // START TAXI (0->(15-30))
+        float distanceToRunway = TERMINAL_TO_RUNWAY_LEN;
+        this->phase = FlightPhase::TAXI;
+        while (this->speed<15 && xPos<830){
+            this->speed += 1.8 + (rand()%20)/10.0; //speed up by 1.8 - 2 km/s
+            distanceToRunway -= this->speed/3600; //s=vt
+            this->xPos += this->speed * step;
+            this->updatePosition();
+            this->consumeFuel();
+            printf("Flight : %d Distance to Runway= %f. Speed=%f\n", this->id, distanceToRunway,this->speed);
+            if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
+                return 0; //exit w/ unfinished status
+            }
+            sleep(1);
+            //usleep(1000);
+        }
+        sprite.rotate(90.f);
+        // KEEP TAXIING UNTIL NEAR RUNWAY
+        while (yPos<320){
+            this->speed += (5-rand()%10)/10.0; //vary by ~0.5
+            distanceToRunway -= this->speed/3600; //s=vt
+            this->yPos += this->speed * step;
+            this->updatePosition();
+            this->consumeFuel();
+            printf("Flight : %d Distance to Runway= %f. Speed=%f\n", this->id, distanceToRunway,this->speed);
+            if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
+                return 0; //exit w/ unfinished status
+            }
+            sleep(1);
+            //usleep(1000);
+        }
+        // TAXI->STOP before takeoff pause
+        while(this->speed>0){
+            this->speed -= 5; //decelerate by 5km/s^2
+            distanceToRunway -= this->speed/3600; //s=vt
+            if (this->speed<0)
+                this->speed=0;
+            this->consumeFuel();
+            this->yPos += this->speed * step;
+            this->updatePosition();
+            printf("Flight : %d Distance to Runway= %f. Speed=%f\n",this->id,distanceToRunway, this->speed);
+            sleep(1);
+            //usleep(1000);
+        }
+        sprite.rotate(90.f);
+        //printf("Flight : %d Stopped at runway dist=%f, prepare to takeoff\n",flight->id, distanceToRunway); //ye submit krna h??? its wirtten in milestone 2 and class to nhi h 
+        // TAKEOFF from standstill
+        step/=4;
+        this->phase = FlightPhase::TAKEOFF;
+        float distanceAlongRunway = RUNWAY_LEN + distanceToRunway;
+        while (xPos > 250){ //while runway left
+            int a = 65050 + (1000-rand()%2000);
+            this->speed += a/3600.0; //v=u+at
+            this->xPos -= this->speed * step;
+            this->updatePosition();
+            this->spriteAltitudeUp();
+            distanceAlongRunway -= this->speed/3600.0 + 0.5*a*pow((1.0/3600),2); //ut+1/2at^2
+            this->consumeFuel();
+            printf("Flight : %d takeoff, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceAlongRunway);
+            sleep(1);
+            //usleep(1000);
+        }
+        //printf("Flight : %d Takeoff at dist remaining=%f\n", flight->id, distanceAlongRunway);
+        // CLIMB
+        this->phase = FlightPhase::CLIMB;
+        while (this->speed < 800){
+            int a = 60000 + (500-rand()%1000);
+            this->speed += a*(1.0/3600); //v=u+at
+            this->altitude += 3280* (this->speed*sin(M_PI/12)*(1.0/3600) + 0.5*(a*sin(M_PI/12))*pow((1.0/3600),2));//ut+1/2at^2
+            this->xPos -= this->speed * step;
+            this->updatePosition();
+            this->spriteAltitudeUp();
             this->consumeFuel();
             printf("Flight : %d climb, speed=%f, altitude=%f\n", this->id,this->speed,this->altitude);
             sleep(1);
@@ -199,7 +357,7 @@ public:
 
     }
 
-    int simulateFlightArrival(bool flightTurn[]){  
+    int simulateInternationalFlightArrival(bool flightTurn[]){  
     
         printf(" ARRIVAL :flight ID: %d\n",this->id);
     
@@ -207,11 +365,15 @@ public:
     
         float distanceToRunway = 3.5; //for a safe-ish descent (50ft/s)
         
+        float step = 0.05;
         //bring flight from HOLDING->APPROACH to avoid violation
         while(this->speed > 292){
             this->speed -= 20 + (1-rand()%2); //~1.5-2.5
             distanceToRunway -= this->speed*(1.0/3600);
-            this->altitude -= 40; //safe (if 1km away its 107ft/s which would kill everyone i fear)
+            this->yPos -= this->speed * step;
+            this->altitude -= 40; 
+            this->updatePosition();
+            //this->spriteAltitudeDown();
             this->consumeFuel();
             printf("flight %d : holding->approach, speed=%f, altitude=%f, dist=%f\n", this->id, this->speed,this->altitude,distanceToRunway);
             if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
@@ -225,7 +387,10 @@ public:
         while(this->speed>242.5){
             this->speed += -5000*(1.0/3600); //v=u+at
             distanceToRunway -= this->speed * (1.0/3600); 
+            this->yPos -= this->speed * step;
             this->altitude -= 50;   
+            this->updatePosition();
+            //this->spriteAltitudeDown();
             this->consumeFuel();
             printf("flight %d : approach, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceToRunway);
             if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
@@ -234,18 +399,21 @@ public:
             sleep(1);
             //usleep(1000);
         }
+        step *= 1.2;
         //LANDING
         this->phase = FlightPhase::LANDING;
         float distanceAlongRunway = distanceToRunway+RUNWAY_LEN; 
         while (this->speed > 30 || this->altitude>0){
             float a = -30750 + (50-rand()%100);
             this->speed += a*(1.0/3600); //v=u+at
+            this->yPos -= this->speed * step;
             distanceAlongRunway -= this->speed/3600.0 + 0.5*a*pow((1.0/3600),2); //ut+1/2at^2
             if (this->altitude>0){
                 this->altitude -= 30;
                 if (this->altitude<0)
                     this->altitude=0;
             }
+            this->updatePosition();
             this->consumeFuel();
             printf("flight %d : landing, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceAlongRunway);
             sleep(1);
@@ -255,24 +423,30 @@ public:
         //TAXI
         this->phase = FlightPhase::TAXI;
         float distanceToGate = distanceAlongRunway+TERMINAL_TO_RUNWAY_LEN;
-        while (distanceToGate>0.1){
+        while (yPos>200){
             if (this->speed<28)
                 this->speed += (50-rand()%100)/100.0;//fluctuate by ~0.5
             else
                 this->speed -= 0.5;
+            this->yPos -= this->speed * step;
+            this->updatePosition();
             distanceToGate -= this->speed*(1.0/3600);
             this->consumeFuel();
             printf("flight %d : taxi, speed=%f, dist=%f\n",this->id, this->speed,distanceToGate);
             sleep(1);
             //usleep(1000);
         }
+        sprite.rotate(-90.f);
         //TAXI->GATE 
-        while(this->speed>0){
+        step *= 4;
+        while(this->speed>0 && xPos>700){
             //flight->speed += -1500*(1.0/3600); //v=u+at
-            this->speed -= 4;
+            this->speed -= 0.5;
             if (this->speed<0)
                 this->speed=0;
             distanceToGate -= this->speed*(1.0/3600);
+            this->xPos -= this->speed * step;
+            this->updatePosition();
             this->consumeFuel();
             printf("flight %d : taxi->gate, speed=%f, dist=%f\n",this->id, this->speed,distanceToGate);
             sleep(1);
@@ -284,6 +458,150 @@ public:
         printf("Flight %d exiting..\n",this->id);
 
         return 1; //exit w/ finished status
+    }
+
+    int simulateDomesticFlightArrival(bool flightTurn[]){  
+    
+        printf(" ARRIVAL :flight ID: %d\n",this->id);
+    
+        // ------------- SIMULATE --------------
+    
+        float distanceToRunway = 3.5; //for a safe-ish descent (50ft/s)
+        
+        float step = 0.05;
+        //bring flight from HOLDING->APPROACH to avoid violation
+        while(this->speed > 292){
+            this->speed -= 20 + (1-rand()%2); //~1.5-2.5
+            distanceToRunway -= this->speed*(1.0/3600);
+            this->yPos += this->speed * step;
+            this->altitude -= 40; 
+            this->updatePosition();
+            //this->spriteAltitudeDown();
+            this->consumeFuel();
+            printf("flight %d : holding->approach, speed=%f, altitude=%f, dist=%f\n", this->id, this->speed,this->altitude,distanceToRunway);
+            if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
+                return 0; //exit w/ unfinished status
+            }
+            //sleep(1);
+            usleep(100000);
+        }
+        //APPROACH
+        this->phase = FlightPhase::APPROACH;
+        while(this->speed>242.5){
+            this->speed += -5000*(1.0/3600); //v=u+at
+            distanceToRunway -= this->speed * (1.0/3600); 
+            this->yPos += this->speed * step;
+            this->altitude -= 50;   
+            this->updatePosition();
+            //this->spriteAltitudeDown();
+            this->consumeFuel();
+            printf("flight %d : approach, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceToRunway);
+            if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
+                return 0;
+            }
+            //sleep(1);
+            usleep(100000);
+        }
+        step *= 1.2;
+        //LANDING
+        this->phase = FlightPhase::LANDING;
+        float distanceAlongRunway = distanceToRunway+RUNWAY_LEN; 
+        while (this->speed > 30 || this->altitude>0 ){
+            float a = -30750 + (50-rand()%100);
+            this->speed += a*(1.0/3600); //v=u+at
+            this->yPos += this->speed * step;
+            distanceAlongRunway -= this->speed/3600.0 + 0.5*a*pow((1.0/3600),2); //ut+1/2at^2
+            if (this->altitude>0){
+                this->altitude -= 30;
+                if (this->altitude<0)
+                    this->altitude=0;
+            }
+            this->updatePosition();
+            this->consumeFuel();
+            printf("flight %d : landing, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceAlongRunway);
+            //sleep(1);
+            if (yPos>540)
+                break;
+            usleep(100000);
+        }
+        sprite.rotate(90.f);
+    
+        //TAXI
+        step *= 5;
+        this->phase = FlightPhase::TAXI;
+        float distanceToGate = distanceAlongRunway+TERMINAL_TO_RUNWAY_LEN;
+        while (xPos>200 || yPos>220){
+            if (this->speed<28)
+                this->speed += (50-rand()%100)/100.0;//fluctuate by ~0.5
+            else
+                this->speed -= 0.5;
+            if (xPos>200)
+                this->xPos -= this->speed * step;
+            else {
+                sprite.setRotation(0.f);
+                this->yPos -= this->speed * step;
+            }
+            this->updatePosition();
+            distanceToGate -= this->speed*(1.0/3600);
+            this->consumeFuel();
+            printf("flight %d : taxi, speed=%f, dist=%f\n",this->id, this->speed,distanceToGate);
+            sleep(1);
+            //usleep(100000);
+        }
+        sprite.rotate(90.f);
+
+        // maybe release the runway here??
+
+        //TAXI->GATE 
+        step *= 4;
+        while(this->speed>0 && xPos<210){
+            //flight->speed += -1500*(1.0/3600); //v=u+at
+            this->speed -= 0.5;
+            if (this->speed<0)
+                this->speed=0;
+            distanceToGate -= this->speed*(1.0/3600);
+            this->xPos += this->speed * step;
+            this->updatePosition();
+            this->consumeFuel();
+            printf("flight %d : taxi->gate, speed=%f, dist=%f\n",this->id, this->speed,distanceToGate);
+            sleep(1);
+            //usleep(100000);
+        }
+        this->phase = FlightPhase::GATE;
+                
+                    
+        printf("Flight %d exiting..\n",this->id);
+
+        return 1; //exit w/ finished status
+    }
+
+
+    //graphics functions
+    void draw(sf::RenderWindow& window) {
+        window.draw(sprite);
+        window.draw(label);
+    }
+
+    void updatePosition(){
+        sprite.setPosition(this->xPos,this->yPos);
+        label.setPosition(this->xPos,this->yPos);
+        printf("x=%f, y=%f\n",xPos,yPos); 
+    }
+
+    void spriteAltitudeUp(){
+        if (this->altitude>0 && xPos>0 && xPos<1000){
+            //scale up going up
+            float scale = altitude/500; 
+            sprite.scale(1+scale,1+scale);
+        }
+    }
+
+    void spriteAltitudeDown(){
+        if (this->altitude>0 && xPos>0 && xPos<1000){
+            //scale up going up
+            float scale = altitude/500; 
+            sprite.scale(1-scale,1-scale);
+        }
     }
 
 };

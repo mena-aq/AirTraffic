@@ -23,9 +23,9 @@ public:
             int phaseIndex = static_cast<int>(phase);
             if (flight->checkViolation() && violation[phaseIndex]==false) {//if first violation of phase
                 
-                dashboard.requestAVN(flight);
-                printf("recived\n");
-                dashboard.printAVNs();
+                //dashboard.requestAVN(flight);
+                //printf("recived\n");
+                //dashboard.printAVNs();
 
                 violation[phaseIndex]=true;
             }
