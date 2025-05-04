@@ -8,9 +8,11 @@ class ATCDashboard {
 public:
     int numViolations;
     std::vector<AVN> AVNs;
+    float max_Y;
 
     ATCDashboard(){
         this->numViolations=0;
+        this->max_Y = 0;
     }
     
     void requestAVN(Flight* requestingFlight){
@@ -29,7 +31,9 @@ public:
         close(fd);
 
         //write
-        AVNs.push_back(AVN(violation->flightID,static_cast<AirlineName>(violation->airline),static_cast<AirlineType>(violation->airlineType),violation->speedRecorded,static_cast<FlightPhase>(violation->phaseViolation),violation->violationTimestamp,violation->amountDue));
+        AVN avn(violation->flightID,static_cast<AirlineName>(violation->airline),static_cast<AirlineType>(violation->airlineType),violation->speedRecorded,static_cast<FlightPhase>(violation->phaseViolation),violation->violationTimestamp,violation->amountDue);
+        avn.initGraphic(max_Y);
+        AVNs.push_back(avn);
     }
 
     void printAVNs(){
@@ -37,6 +41,18 @@ public:
             AVNs[i].printAVN();
         }
     }
+
+    //clear AVN
+
+    //graphics
+    void displayAVNs(sf::RenderWindow& window){
+        for (int i=0; i<AVNs.size(); i++){
+            AVNs[i].drawGraphic(window);
+        }
+    }
+
+    //recalculate
+    
 };
 
 #endif

@@ -4,9 +4,11 @@
 #include "QueueFlights.h"
 #include "Radar.h"
 #include "Timer.h"
+#include "FlightPanel.h"
 
 bool flightTurn[TOTAL_FLIGHTS]={false};
 pthread_cond_t flightCond[TOTAL_FLIGHTS];
+
 
 //make the 3 runways
 Runway rwyA('A'); 
@@ -25,6 +27,7 @@ void* simulateWaitingAtGate(void* arg){
     args* flightArg = static_cast<args*>(arg);
     Flight* flight = flightArg->flight;
     const char runwayToAcquire = flightArg->runway;
+    cout<<"at gate flight: "<< flight->id<<endl;
 
     int status = 0;
     while (1){
@@ -38,17 +41,17 @@ void* simulateWaitingAtGate(void* arg){
             if (int(flight->waitingTime)%100 == 0)
                 flight->priority++; //up the priority every 100s
         }
-        
-        if (runwayToAcquire=='C')
+        if (runwayToAcquire=='C'){
             rwyC.acquireRunway();
-        else
+            status = flight->simulateEmergencyFlightDeparture(flightTurn);
+        }
+        else{
             rwyB.acquireRunway();
-
-        if (flight->isInternational())
-            status = flight->simulateInternationalFlightDeparture(flightTurn);
-        else
-            status = flight->simulateDomesticFlightDeparture(flightTurn);
-
+            if (flight->isInternational())
+                status = flight->simulateInternationalFlightDeparture(flightTurn);
+            else
+                status = flight->simulateDomesticFlightDeparture(flightTurn);
+        }
 
         if (runwayToAcquire=='C')
             rwyC.releaseRunway();
@@ -84,16 +87,17 @@ void* simulateWaitingInHolding(void* arg){
             sleep(1);
         }
             
-        if (runwayToAcquire=='C')
+        if (runwayToAcquire=='C'){
             rwyC.acquireRunway();
-        else
+            status = flight->simulateEmergencyFlightArrival(flightTurn);
+        }
+        else{
             rwyA.acquireRunway();
-
-        if (flight->isInternational())
-            status = flight->simulateInternationalFlightArrival(flightTurn);
-        else
-            status = flight->simulateDomesticFlightArrival(flightTurn);
-
+            if (flight->isInternational())
+                status = flight->simulateInternationalFlightArrival(flightTurn);
+            else
+                status = flight->simulateDomesticFlightArrival(flightTurn);
+        }
     
         if (runwayToAcquire=='C')
             rwyC.releaseRunway();
@@ -125,12 +129,18 @@ public:
     //for those whose arrival time has occured
     QueueFlights* internationalWaitingQueue; 
     QueueFlights* domesticWaitingQueue;
+    //current
+    Flight* currentFlight;
+
+    //graphics
+    static FlightPanel flightPanel; 
 
     Dispatcher(char runway,QueueFlights*& domesticQueue, QueueFlights*& interQueue): runway(runway){
         this->internationalFlights= interQueue;
         this->domesticFlights= domesticQueue;
         internationalWaitingQueue= new QueueFlights;
         domesticWaitingQueue = new QueueFlights;
+        this->currentFlight = nullptr;
     }
     
     static void* dispatchFlights(void* arg) {
@@ -176,7 +186,8 @@ public:
         }
         sleep(1); //this is the bandaid holding this tgt
 
-        Flight* currentFlight = nullptr;
+        //Flight* dispatcher->currentFlight = nullptr;
+        //Flight* dispatcher->currentFlight = dispatcher->dispatcher->currentFlight;
         int currentFlightID = -1;
         int x=1;
 
@@ -193,6 +204,7 @@ public:
                     if (readyInternational->isArrival()){
                         internationalWaitingQueue->addFlight(readyInternational); //add to waiting
                         printf("time for flight %d\n",readyInternational->id);
+                        dispatcher->flightPanel.addCard(readyInternational);
                     }
                     else
                         internationalFlightsQueue->addFlightAtFront(readyInternational); //add back (C)
@@ -202,17 +214,19 @@ public:
                     if (readyDomestic->isArrival()){
                         printf("time for flight %d\n",readyDomestic->id);
                         domesticWaitingQueue->addFlight(readyDomestic);
+                        dispatcher->flightPanel.addCard(readyDomestic);
                     }
                     else
                         domesticFlightsQueue->addFlightAtFront(readyDomestic);
                 }
             }
-            else if (dispatcher->runway == 'B'){
+            if (dispatcher->runway == 'B' || dispatcher->runway == 'C'){
                 if (Timer::currentTime % 150 == 0 && !internationalFlightsQueue->isEmpty()){ //move a international departure to waiting Q
                     readyInternational = internationalFlightsQueue->getNextFlight();
                     if (readyInternational->isDeparture()){
                         printf("time for flight %d\n",readyInternational->id);
                         internationalWaitingQueue->addFlight(readyInternational); //add to waiting
+                        dispatcher->flightPanel.addCard(readyInternational);
                     }
                     else
                         internationalFlightsQueue->addFlightAtFront(readyInternational); //add back (C)
@@ -222,6 +236,7 @@ public:
                     if (readyDomestic->isDeparture()){
                         domesticWaitingQueue->addFlight(readyDomestic);
                         printf("time for flight %d\n",readyDomestic->id);
+                        dispatcher->flightPanel.addCard(readyDomestic);
                     }
                     else
                         domesticFlightsQueue->addFlightAtFront(readyDomestic);                
@@ -261,69 +276,69 @@ public:
 
             // check if anyone currently running do we pre-empt
             if (nextFlight != nullptr) {
-                if (currentFlight == nullptr){
+                if (dispatcher->currentFlight == nullptr){
                     //just assign
                     flightTurn [nextFlight->id-1] = true;
-                    currentFlight = nextFlight;
-                    currentFlightID = currentFlight->id;
+                    dispatcher->currentFlight = nextFlight;
+                    currentFlightID = dispatcher->currentFlight->id;
                 }
                 else{
                     //check if can pre-empt
-                    if (dispatcher->runway == 'A' && nextFlight->priority > currentFlight->priority && currentFlight->phase < FlightPhase::LANDING){
+                    if (dispatcher->runway == 'A' && nextFlight->priority > dispatcher->currentFlight->priority && dispatcher->currentFlight->phase < FlightPhase::LANDING){
                         //pre-empt current
-                        printf("flight %d pre=empting flight %d\n",nextFlight->id,currentFlight->id);
-                        flightTurn[currentFlight->id - 1]=false;
+                        printf("flight %d pre=empting flight %d\n",nextFlight->id,dispatcher->currentFlight->id);
+                        flightTurn[dispatcher->currentFlight->id - 1]=false;
                         sleep(1); //give it some time to go back to holding
                         flightTurn [nextFlight->id-1] = true;
-                        currentFlight = nextFlight;
-                        currentFlightID = currentFlight->id;
+                        dispatcher->currentFlight = nextFlight;
+                        currentFlightID = dispatcher->currentFlight->id;
                     }
-                    else if (dispatcher->runway == 'B' && nextFlight->priority > currentFlight->priority && currentFlight->phase < FlightPhase::TAKEOFF){
+                    else if (dispatcher->runway == 'B' && nextFlight->priority > dispatcher->currentFlight->priority && dispatcher->currentFlight->phase < FlightPhase::TAKEOFF){
                         //pre-empt current
-                        printf("flight %d pre=empting flight %d\n",nextFlight->id,currentFlight->id);
-                        flightTurn[currentFlight->id - 1]=false;
+                        printf("flight %d pre=empting flight %d\n",nextFlight->id,dispatcher->currentFlight->id);
+                        flightTurn[dispatcher->currentFlight->id - 1]=false;
                         sleep(1); //give it some time to go back to holding
                         flightTurn [nextFlight->id-1] = true;
-                        currentFlight = nextFlight;
-                        currentFlightID = currentFlight->id;
+                        dispatcher->currentFlight = nextFlight;
+                        currentFlightID = dispatcher->currentFlight->id;
                     }
-                    else if (dispatcher->runway == 'C' && nextFlight->priority > currentFlight->priority){
+                    else if (dispatcher->runway == 'C' && nextFlight->priority > dispatcher->currentFlight->priority){
                         //if opposite types, if current flight is departure and < takeoff, preempt
                         // else dont preempt
                         // of same types so check for each type, and their phases and preempt accordingly
                         printf("C pre-empt\n");
-                        if(currentFlight->isArrival() && currentFlight->phase<FlightPhase:: LANDING
+                        if(dispatcher->currentFlight->isArrival() && dispatcher->currentFlight->phase<FlightPhase:: LANDING
                             &&nextFlight->isDeparture()){
-                            flightTurn[currentFlight->id -1]=false;
+                            flightTurn[dispatcher->currentFlight->id -1]=false;
                             sleep(1);
                             flightTurn[nextFlight->id -1]=true;
-                            currentFlight = nextFlight;
-                            currentFlightID = currentFlight->id;
+                            dispatcher->currentFlight = nextFlight;
+                            currentFlightID = dispatcher->currentFlight->id;
 
                         }
-                        else if( currentFlight->isDeparture() && currentFlight->phase<FlightPhase:: TAKEOFF
+                        else if( dispatcher->currentFlight->isDeparture() && dispatcher->currentFlight->phase<FlightPhase:: TAKEOFF
                             &&nextFlight->isArrival()){
-                            flightTurn[currentFlight->id -1]=false;
+                            flightTurn[dispatcher->currentFlight->id -1]=false;
                             sleep(1);
                             flightTurn[nextFlight->id -1]=true;
-                            currentFlight = nextFlight;
-                            currentFlightID = currentFlight->id;
+                            dispatcher->currentFlight = nextFlight;
+                            currentFlightID = dispatcher->currentFlight->id;
 
                         }
-                        else if(currentFlight->isArrival() &&currentFlight->phase<FlightPhase:: LANDING){
-                            flightTurn[currentFlight->id -1]=false;
+                        else if(dispatcher->currentFlight->isArrival() &&dispatcher->currentFlight->phase<FlightPhase:: LANDING){
+                            flightTurn[dispatcher->currentFlight->id -1]=false;
                             sleep(1);
                             flightTurn[nextFlight->id -1]=true;
-                            currentFlight = nextFlight;
-                            currentFlightID = currentFlight->id;
+                            dispatcher->currentFlight = nextFlight;
+                            currentFlightID = dispatcher->currentFlight->id;
 
                         }
-                        else if(currentFlight->isDeparture() &&currentFlight->phase<FlightPhase:: TAKEOFF){
-                            flightTurn[currentFlight->id -1]=false;
+                        else if(dispatcher->currentFlight->isDeparture() &&dispatcher->currentFlight->phase<FlightPhase:: TAKEOFF){
+                            flightTurn[dispatcher->currentFlight->id -1]=false;
                             sleep(1);
                             flightTurn[nextFlight->id -1]=true;
-                            currentFlight = nextFlight;
-                            currentFlightID = currentFlight->id;
+                            dispatcher->currentFlight = nextFlight;
+                            currentFlightID = dispatcher->currentFlight->id;
 
                         }
 
@@ -338,27 +353,44 @@ public:
                 }
                 nextFlight = nullptr;
             }
-            if (currentFlight && currentFlight->phase == FlightPhase::DONE){ //its done
+            if (dispatcher->currentFlight && dispatcher->currentFlight->phase == FlightPhase::DONE){ //its done
                 flightTurn[currentFlightID-1]=false;
+                flightPanel.removeCardById(dispatcher->currentFlight->id);
                 currentFlightID = -1;
-                free(currentFlight);
-                currentFlight = nullptr;
+                free(dispatcher->currentFlight);
+                dispatcher->currentFlight = nullptr;
                 //printf("unset turn");
             }
-            else{
-                //printf("current flight: %d\n",currentFlight->id);
-            }
-
             sleep(1);
         }
         printf("all flights done\n");
         pthread_exit(nullptr);
     }
 
+    void drawFlights(Dispatcher* dispatcher,sf::RenderWindow& window,sf::RenderWindow& aWindow){
+        //draw waiting flights
+        for (int i=0; i<internationalWaitingQueue->numInQueue(); i++){
+            (*internationalWaitingQueue)[i]->draw(window);
+        }
+        for (int i=0; i<domesticWaitingQueue->numInQueue(); i++){
+            (*domesticWaitingQueue)[i]->draw(window);
+        }
+        //draw current flight
+        if (dispatcher->currentFlight){
+            dispatcher->currentFlight->draw(window);
+        }
+        //draw panel
+        flightPanel.displayPanel(window);
+
+        //draw AVNS
+        dispatcher->radar.dashboard.displayAVNs(aWindow);
+
+    }
+
 };
 pthread_t Dispatcher::flightTid[TOTAL_FLIGHTS];
 pthread_t Dispatcher::radarTid[TOTAL_FLIGHTS];
-
+FlightPanel Dispatcher::flightPanel;
 
 // for input
 FlightType getFlightType(char dir){
@@ -517,27 +549,37 @@ int main() {
     Timer timer;
     pthread_t timerThread;
 
-    Flight* f1 = new Flight(1, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA,12.0,'S');
+    Flight* f1 = new Flight(1, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA,12.0,'N');
+    Flight* f2 = new Flight(2, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: MILITARY, AirlineName::Pakistan_Airforce,12.30,'S');
     rwyADispatcher.internationalFlights->addFlight(f1);
+    //rwyADispatcher.domesticFlights->addFlight(f2);
+     
+    Flight* f3 = new Flight(3, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: COMMERCIAL, AirlineName:: PIA,12.0,'W');
+    Flight* f4 = new Flight(4, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: MEDICAL, AirlineName:: AghaKhan_Air_Ambulance,12.01,'E');
+    rwyBDispatcher.internationalFlights->addFlight(f4);
+    //rwyBDispatcher.domesticFlights->addFlight(f3);
 
-    Flight* f3 = new Flight(3, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: COMMERCIAL, AirlineName:: PIA,12.15,'E');
-    rwyBDispatcher.domesticFlights->addFlight(f3);
+    //Flight* f5 = new Flight(5, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: CARGO, AirlineName:: FedEx);
+    //Flight* f6 = new Flight(6, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: CARGO, AirlineName:: Blue_Dart);
+    //rwyCDispatcher.domesticFlights->addFlight(f5);
+    //rwyCDispatcher.internationalFlights->addFlight(f6);
 
     pthread_create(&dispatcherA, nullptr, Dispatcher::dispatchFlights, (void*)&rwyADispatcher);   
-    //pthread_create(&dispatcherB, nullptr, Dispatcher::dispatchFlights, (void*)&rwyBDispatcher);
+    pthread_create(&dispatcherB, nullptr, Dispatcher::dispatchFlights, (void*)&rwyBDispatcher);
     //pthread_create(&dispatcherC, nullptr, Dispatcher::dispatchFlights, (void*)&rwyCDispatcher);
 
     sleep(1);
     pthread_create(&timerThread,NULL,timer.simulationTimer,NULL);
 
     //start graphics window
-    sf::RenderWindow window(sf::VideoMode(960, 600), "SFML Starter");
+    sf::RenderWindow window(sf::VideoMode(960, 600), "ATCS");
+    sf::RenderWindow AVNwindow(sf::VideoMode(540,960),"AVN Dashboard");
     sf::Texture backgroundTexture;
     if (!backgroundTexture.loadFromFile("background.png")) {
         return -1;  // handle error
     }
     sf::Sprite backgroundSprite(backgroundTexture);
-    while (window.isOpen())
+    while (window.isOpen() || AVNwindow.isOpen() )
     {
         sf::Event event;
         while (window.pollEvent(event))
@@ -545,15 +587,24 @@ int main() {
             if (event.type == sf::Event::Closed)
                 window.close();
         }
+        while (AVNwindow.pollEvent(event)) {
+            if (event.type == sf::Event::Closed)
+                AVNwindow.close();
+        }
 
         window.clear();
+        AVNwindow.clear();
         window.draw(backgroundSprite);
-        f1->draw(window);
+        rwyADispatcher.drawFlights(&rwyADispatcher,window,AVNwindow);
+        rwyBDispatcher.drawFlights(&rwyBDispatcher,window,AVNwindow);
+        //rwyCDispatcher.drawFlights(window);
         window.display();
+        AVNwindow.display();
     }
 
+
     pthread_join(dispatcherA, NULL);
-    //pthread_join(dispatcherB, NULL);
+    pthread_join(dispatcherB, NULL);
     //pthread_join(dispatcherC, NULL);
     pthread_join(timerThread, NULL);
     return 0;

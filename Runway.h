@@ -3,6 +3,7 @@
 #define RUNWAY_H
 
 #include <pthread.h>
+#include <stdio.h>
 
 class Runway {
 private:
@@ -19,9 +20,9 @@ public:
     }
 
     void acquireRunway(){
-        //printf("try to acquire runway %c\n",this->runwayID);
+        printf("try to acquire runway %c\n",this->runwayID);
         pthread_mutex_lock(&lock);
-        //printf("acquired runway %c\n",this->runwayID);
+        printf("acquired runway %c\n",this->runwayID);
     }
     void releaseRunway(){
         pthread_mutex_unlock(&lock);
