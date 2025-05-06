@@ -21,11 +21,10 @@ public:
         float xPos = 120.f; 
         float yPos = 5.f; 
     
-        float dx = 250;
         pthread_mutex_lock(&l);
         if (!flightCards.empty()) {
             const FlightCard& lastCard = flightCards.back();
-            max_X+=120;
+            max_X+=150;
             xPos = max_X;
         }
         FlightCard fc(flight, xPos, yPos);
@@ -48,13 +47,13 @@ public:
     void recalculateCardPositions() {
         float startY = 5.f;
         float startX = 120.f;
-        float dx = 120.f;
+
         float xPos = startX;
         for (auto& card : flightCards) {
             card.x = xPos;
             card.y = startY;
             card.setPosition(xPos,startY); 
-            xPos += dx;
+            xPos += 150;
             max_X = xPos;
         }
     }

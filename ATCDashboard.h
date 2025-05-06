@@ -9,12 +9,22 @@ public:
     int numViolations;
     std::vector<AVN> AVNs;
     float max_Y;
+    float max_X;
 
     ATCDashboard(){
         this->numViolations=0;
-        this->max_Y = 0;
+        this->max_Y = 80;
+        this->max_X = 10;
+    }
+
+    void addAVN(ViolationInfo* violation){
+        AVN avn(violation->flightID,static_cast<AirlineName>(violation->airline),static_cast<AirlineType>(violation->airlineType),violation->speedRecorded,static_cast<FlightPhase>(violation->phaseViolation),violation->violationTimestamp,violation->amountDue);
+        avn.initGraphic(max_X,max_Y);
+        AVNs.push_back(avn);
+        printAVNs();
     }
     
+/*
     void requestAVN(Flight* requestingFlight){
         //send to AVN generator to generate AVN
         //send id, airline name,airline type, recorded speed, phase
@@ -35,6 +45,7 @@ public:
         avn.initGraphic(max_Y);
         AVNs.push_back(avn);
     }
+*/
 
     void printAVNs(){
         for (int i=0; i<AVNs.size(); i++){

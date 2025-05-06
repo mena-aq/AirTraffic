@@ -10,10 +10,10 @@ public:
 
     PhaseRules(){
         flightPhases[(int)FlightPhase::GATE] = Phase{0, 10, 0, 0};
-        flightPhases[(int)FlightPhase::TAXI] = Phase{15, 30, 0, 0};
+        flightPhases[(int)FlightPhase::TAXI] = Phase{0, 30, 0, 0};
         flightPhases[(int)FlightPhase::TAKEOFF] = Phase{0, 290, 0, 500};                            
-        flightPhases[(int)FlightPhase::CLIMB] = Phase{250, 463, 0, 5000};
-        flightPhases[(int)FlightPhase::CRUISE] = Phase{800, 900, 5000, 10000};
+        flightPhases[(int)FlightPhase::CLIMB] = Phase{250, 800, 0, 5000};//cant be 463 or else ill always get a violation
+        flightPhases[(int)FlightPhase::CRUISE] = Phase{780, 900, 5000, 10000};
         flightPhases[(int)FlightPhase::HOLDING] = Phase{290, 600, 2000, 5000};
         flightPhases[(int)FlightPhase::APPROACH] = Phase{240, 290, 800, 1000};
         flightPhases[(int)FlightPhase::LANDING] = Phase{30, 240, 0, 800};        

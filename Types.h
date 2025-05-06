@@ -99,6 +99,40 @@ void printAirlineType(AirlineType airlineytype) {
     }
 }
 
+std::string getPhase(FlightPhase phase) {
+    switch (phase) {
+        case FlightPhase::GATE: return "GATE"; break;
+        case FlightPhase::TAXI: return "TAXI"; break;
+        case FlightPhase::TAKEOFF: return "TAKEOFF"; break;
+        case FlightPhase::CLIMB: return "CLIMB"; break;
+        case FlightPhase::CRUISE: return "CRUISE"; break;
+        case FlightPhase::HOLDING: return "HOLDING"; break;
+        case FlightPhase::APPROACH: return "APPROACH"; break;
+        case FlightPhase::LANDING: return "LANDING"; break;
+    }
+    return "";
+}
+std::string getAirlineName(AirlineName airlineName){
+    switch (airlineName) {
+        case PIA: return "PIA"; break;
+        case AirBlue: return "AirBlue"; break;
+        case FedEx: return "FedEx"; break;
+        case Pakistan_Airforce: return "Pakistan Airforce"; break;
+        case Blue_Dart: return "Blue Dart"; break;
+        case AghaKhan_Air_Ambulance: return "AK Air Ambulance"; break;
+    }
+    return "";
+}
+std::string getAirlineType(AirlineType airlineType){
+    switch (airlineType) {
+        case COMMERCIAL: return "COMMERCIAL"; break;
+        case CARGO: return "CARGO"; break;
+        case MEDICAL: return "MEDICAL"; break;
+        case MILITARY: return "MILITARY"; break;
+    }
+    return "";
+}
+
 //font
 sf::Font globalFont;
 inline void loadFont() {

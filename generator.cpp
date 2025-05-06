@@ -1,81 +1,63 @@
-#include <iostream>
-#include <string>
-#include <pthread.h>
-#include <unistd.h>
-#include <semaphore.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <ctime>
-#include <chrono>
-
+#include "Types.h"
+#include "ViolationInfo.h"
+#include "ATCDashboard.h"
 
 //FIFO
 #define AVN_FIFO1 "pipes/avnfifo_ATC"
 #define AVN_FIFO2 "pipes/avnfifo_GEN"
 
+ATCDashboard dashboard;
 
-// AVN (Violation Notice) //maybe we can make a .h
-struct ViolationInfo {
-    int flightID;
-    int airline;
-    int airlineType;
-    float speedRecorded;
-    int phaseViolation;
-    time_t violationTimestamp;
-    //long violationTimestamp;
-    //for AVN generator
-    float amountDue;
-    bool status;  // true= paid, false= unpaid
+void* generateAVNs(void* arg){
+    int fd=-1;
+    while (1){
 
-    ViolationInfo():flightID(-1),airline(0),airlineType(0),speedRecorded(0),phaseViolation(0),violationTimestamp(0),amountDue(0),status(0){}
-
-    ViolationInfo(int flightID,int airline,int airlineType,float speedRecorded,int phaseViolation)
-    : flightID(flightID), airline(airline), airlineType(airlineType), speedRecorded(speedRecorded), phaseViolation(phaseViolation){
-        this->violationTimestamp = std::time(nullptr); //save current time
-        auto currentTime = std::chrono::system_clock::now();
-    }
-
-    void generateFee(){
-        //generate AVN
-        if(this->airlineType == 3){
-            this->amountDue= 500000;
-            this->amountDue+= 0.15*this->amountDue;
-        }
-        else if (this->airlineType ==  2){
-            this->amountDue= 700000;
-            this->amountDue+= 0.15*this->amountDue;
-        }
-        else{
-            this->status = 1; //if no fee consider paid??
-        }
+        //read any AVN request
+        ViolationInfo* violation = new ViolationInfo;
+        fd = open(AVN_FIFO1,O_RDONLY);
+        read(fd,(void*)violation,sizeof(ViolationInfo));
+        close(fd);
+        violation->generateFee();
+        //add to list
+        dashboard.addAVN(violation);
+        free(violation);
 
     }
-};
-    
-
-
+    pthread_exit(NULL);
+}
 
 int main(){
 
     mkfifo(AVN_FIFO1,0666);
     mkfifo(AVN_FIFO2,0666);
+    loadFont();
 
-    int fd=-1;
-    while (1){
-        //read request
-        ViolationInfo* violation = new ViolationInfo;
-        fd = open(AVN_FIFO1,O_RDONLY);
-        read(fd,(void*)violation,sizeof(ViolationInfo));
-        close(fd);
+    pthread_t AVNreceive; //with ATCS process to receive and make AVN
 
-        //return fee
-        violation->generateFee();
-        fd = open(AVN_FIFO2,O_WRONLY);
-        write(fd,(void*)violation,sizeof(ViolationInfo));
-        close(fd);
-        //printf("returned fee: %f\n",violation->amountDue);
+    //stripe pay admin portal
+    pthread_create(&AVNreceive,NULL,generateAVNs,NULL);
 
-        free(violation);
+    //main thread prints avn window
+    sf::RenderWindow window(sf::VideoMode(600,720),"AVN Dashboard");
+    sf::Texture avnBG;
+    if (!avnBG.loadFromFile("AVN.png")) {
+        printf("cant load texture\n");
     }
+    sf::Sprite bgSprite(avnBG);
+    while (window.isOpen() )
+    {
+        sf::Event event;
+        while (window.pollEvent(event))
+        {
+            if (event.type == sf::Event::Closed)
+                window.close();
+        }
+
+        window.clear();
+        window.draw(bgSprite);
+        dashboard.displayAVNs(window);
+        window.display();
+    }
+
+    pthread_join(AVNreceive,NULL);
 }

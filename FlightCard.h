@@ -15,7 +15,7 @@ public:
     FlightCard(Flight* flight,float x,float y){
         details.setPosition(x,y);
         details.setFont(globalFont);
-        details.setFillColor(sf::Color::White);  
+        details.setFillColor(sf::Color::Yellow);  
         details.setCharacterSize(12);
         this->flight = flight;
     }
@@ -27,17 +27,18 @@ public:
     }
 
     void drawCard(sf::RenderWindow& window){
-        std::ostringstream ss;
-        ss << "Flight " << flight->id << "\n";
-        ss << "Airline: " << flight->airlineName << "\n";
-        ss << "Airline Type: " << flight->airlineType << "\n";
-        ss << flight->speed << " km/h";
-        ss << " | Alt: " << flight->altitude << " ft" << "\n";
-        ss << "Phase: " << flight->phase << "\n";
-        ss << "Fuel: " << flight->fuelLevel << "gal. \n";
-        ss << "Priority: " << flight->priority << "\n";
-    
-        details.setString(ss.str());
+        if (flight){
+            std::ostringstream ss;
+            ss << "Flight " << flight->id << "\n";
+            ss << "Airline: " << getAirlineName(flight->airlineName) << "\n";
+            ss << "Airline Type: " << getAirlineType(flight->airlineType) << "\n";
+            ss << std::round(flight->speed) << " km/h";
+            ss << " | Alt: " << std::round(flight->altitude) << " ft" << "\n";
+            ss << "Phase: " << getPhase(flight->phase) << "\n";
+            ss << "Fuel: " << flight->fuelLevel << "gal. \n";
+            ss << "Priority: " << flight->priority << "\n";
+            details.setString(ss.str());
+        }
         window.draw(details);
     }
 

@@ -28,6 +28,8 @@ public:
     bool faulty;
     PhaseRules flightPhases;
 
+    int flagged;
+
     float xPos;
     float yPos;
     sf::Texture texture;
@@ -35,7 +37,7 @@ public:
     sf::Text label;
 
 
-    Flight(int id, FlightType flightType, AirlineType airlineType, AirlineName name,float st, char dir ) :  id(id), direction(dir), scheduledTime(st), thread_id(-1), radar_id(-1), airlineName(name), airlineType(airlineType), flightType(flightType), waitingTime(0), faulty(false){    
+    Flight(int id, FlightType flightType, AirlineType airlineType, AirlineName name,float st, char dir ) :  id(id), direction(dir), scheduledTime(st), thread_id(-1), radar_id(-1), airlineName(name), airlineType(airlineType), flightType(flightType), waitingTime(0), faulty(false), flagged(false){    
         
         if (flightType == FlightType::DOMESTIC_ARRIVAL || flightType == FlightType::INTERNATIONAL_ARRIVAL) {
             phase = FlightPhase::HOLDING; // if its arriving, start phase is holding
@@ -89,7 +91,7 @@ public:
         }
         else if (this->direction == 'S'){
             this->xPos = 900;
-            this->yPos = 1050;
+            this->yPos = 1080;
             updatePosition();
         }
         if (this->isArrival() && airlineType == AirlineType::CARGO){//special case of emergency arrival
@@ -232,7 +234,7 @@ public:
         //printf("Flight : %d Takeoff at dist remaining=%f\n", flight->id, distanceAlongRunway);
         // CLIMB
         this->phase = FlightPhase::CLIMB;
-        while (this->speed < 800){
+        while (this->speed < 780){
             int a = 60000 + (500-rand()%1000);
             this->speed += a*(1.0/3600); //v=u+at
             this->altitude += 3280* (this->speed*sin(M_PI/12)*(1.0/3600) + 0.5*(a*sin(M_PI/12))*pow((1.0/3600),2));//ut+1/2at^2
@@ -248,7 +250,7 @@ public:
         this->phase=FlightPhase::CRUISE;
         float cruisingAltitude = (flightPhases[FlightPhase::CRUISE].altitudeLowerLimit + flightPhases[FlightPhase::CRUISE].altitudeUpperLimit)/2.0;
         while (this->altitude < cruisingAltitude){
-            int a = 25000 + (500-rand()%1000);
+            int a = 25000 + (100-rand()%200);
             this->speed += a/3600.0; //v=u+at
             this->altitude += 200;
             this->spriteAltitudeUp();
@@ -336,7 +338,7 @@ public:
         //printf("Flight : %d Takeoff at dist remaining=%f\n", flight->id, distanceAlongRunway);
         // CLIMB
         this->phase = FlightPhase::CLIMB;
-        while (this->speed < 800){
+        while (this->speed < 780){
             int a = 60000 + (500-rand()%1000);
             this->speed += a*(1.0/3600); //v=u+at
             this->altitude += 3280* (this->speed*sin(M_PI/12)*(1.0/3600) + 0.5*(a*sin(M_PI/12))*pow((1.0/3600),2));//ut+1/2at^2
@@ -376,7 +378,7 @@ public:
         
         float step = 0.05;
         //bring flight from HOLDING->APPROACH to avoid violation
-        while(this->speed > 292){
+        while(this->speed > 300){
             this->speed -= 20 + (1-rand()%2); //~1.5-2.5
             distanceToRunway -= this->speed*(1.0/3600);
             this->yPos -= this->speed * step;
@@ -412,9 +414,10 @@ public:
         //LANDING
         this->phase = FlightPhase::LANDING;
         float distanceAlongRunway = distanceToRunway+RUNWAY_LEN; 
-        while (this->speed > 30 || this->altitude>0){
+        while (this->yPos > 220 || this->altitude>0){
             float a = -30750 + (50-rand()%100);
-            this->speed += a*(1.0/3600); //v=u+at
+            if (this->speed > 32)
+                this->speed += a*(1.0/3600); //v=u+at
             this->yPos -= this->speed * step;
             distanceAlongRunway -= this->speed/3600.0 + 0.5*a*pow((1.0/3600),2); //ut+1/2at^2
             if (this->altitude>0){
@@ -480,7 +483,7 @@ public:
         
         float step = 0.05;
         //bring flight from HOLDING->APPROACH to avoid violation
-        while(this->speed > 292){
+        while(this->speed > 300){
             this->speed -= 20 + (1-rand()%2); //~1.5-2.5
             distanceToRunway -= this->speed*(1.0/3600);
             this->yPos += this->speed * step;
@@ -660,7 +663,7 @@ public:
         //printf("Flight : %d Takeoff at dist remaining=%f\n", flight->id, distanceAlongRunway);
         // CLIMB
         this->phase = FlightPhase::CLIMB;
-        while (this->speed < 800){
+        while (this->speed < 780){
             int a = 60000 + (500-rand()%1000);
             this->speed += a*(1.0/3600); //v=u+at
             this->altitude += 3280* (this->speed*sin(M_PI/12)*(1.0/3600) + 0.5*(a*sin(M_PI/12))*pow((1.0/3600),2));//ut+1/2at^2

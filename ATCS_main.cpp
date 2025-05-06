@@ -131,6 +131,8 @@ public:
     QueueFlights* domesticWaitingQueue;
     //current
     Flight* currentFlight;
+    //finished flights
+    static vector<Flight*> finishedFlights;
 
     //graphics
     static FlightPanel flightPanel; 
@@ -357,7 +359,8 @@ public:
                 flightTurn[currentFlightID-1]=false;
                 flightPanel.removeCardById(dispatcher->currentFlight->id);
                 currentFlightID = -1;
-                free(dispatcher->currentFlight);
+                finishedFlights.push_back(dispatcher->currentFlight);
+                //free(dispatcher->currentFlight);
                 dispatcher->currentFlight = nullptr;
                 //printf("unset turn");
             }
@@ -367,7 +370,7 @@ public:
         pthread_exit(nullptr);
     }
 
-    void drawFlights(Dispatcher* dispatcher,sf::RenderWindow& window,sf::RenderWindow& aWindow){
+    void drawFlights(Dispatcher* dispatcher,sf::RenderWindow& window){
         //draw waiting flights
         for (int i=0; i<internationalWaitingQueue->numInQueue(); i++){
             (*internationalWaitingQueue)[i]->draw(window);
@@ -383,7 +386,7 @@ public:
         flightPanel.displayPanel(window);
 
         //draw AVNS
-        dispatcher->radar.dashboard.displayAVNs(aWindow);
+        //dispatcher->radar.dashboard.displayAVNs(aWindow);
 
     }
 
@@ -391,6 +394,7 @@ public:
 pthread_t Dispatcher::flightTid[TOTAL_FLIGHTS];
 pthread_t Dispatcher::radarTid[TOTAL_FLIGHTS];
 FlightPanel Dispatcher::flightPanel;
+vector<Flight*> Dispatcher::finishedFlights;
 
 // for input
 FlightType getFlightType(char dir){
@@ -551,13 +555,13 @@ int main() {
 
     Flight* f1 = new Flight(1, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA,12.0,'N');
     Flight* f2 = new Flight(2, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: MILITARY, AirlineName::Pakistan_Airforce,12.30,'S');
-    rwyADispatcher.internationalFlights->addFlight(f1);
-    //rwyADispatcher.domesticFlights->addFlight(f2);
+    //rwyADispatcher.internationalFlights->addFlight(f1);
+    rwyADispatcher.domesticFlights->addFlight(f2);
      
     Flight* f3 = new Flight(3, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: COMMERCIAL, AirlineName:: PIA,12.0,'W');
     Flight* f4 = new Flight(4, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: MEDICAL, AirlineName:: AghaKhan_Air_Ambulance,12.01,'E');
     rwyBDispatcher.internationalFlights->addFlight(f4);
-    //rwyBDispatcher.domesticFlights->addFlight(f3);
+    rwyBDispatcher.domesticFlights->addFlight(f3);
 
     //Flight* f5 = new Flight(5, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: CARGO, AirlineName:: FedEx);
     //Flight* f6 = new Flight(6, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: CARGO, AirlineName:: Blue_Dart);
@@ -573,13 +577,13 @@ int main() {
 
     //start graphics window
     sf::RenderWindow window(sf::VideoMode(960, 600), "ATCS");
-    sf::RenderWindow AVNwindow(sf::VideoMode(540,960),"AVN Dashboard");
     sf::Texture backgroundTexture;
     if (!backgroundTexture.loadFromFile("background.png")) {
-        return -1;  // handle error
+        printf("cant load texture\n");
     }
+
     sf::Sprite backgroundSprite(backgroundTexture);
-    while (window.isOpen() || AVNwindow.isOpen() )
+    while (window.isOpen() )
     {
         sf::Event event;
         while (window.pollEvent(event))
@@ -587,19 +591,13 @@ int main() {
             if (event.type == sf::Event::Closed)
                 window.close();
         }
-        while (AVNwindow.pollEvent(event)) {
-            if (event.type == sf::Event::Closed)
-                AVNwindow.close();
-        }
 
         window.clear();
-        AVNwindow.clear();
         window.draw(backgroundSprite);
-        rwyADispatcher.drawFlights(&rwyADispatcher,window,AVNwindow);
-        rwyBDispatcher.drawFlights(&rwyBDispatcher,window,AVNwindow);
+        rwyADispatcher.drawFlights(&rwyADispatcher,window);
+        rwyBDispatcher.drawFlights(&rwyBDispatcher,window);
         //rwyCDispatcher.drawFlights(window);
         window.display();
-        AVNwindow.display();
     }
 
 
