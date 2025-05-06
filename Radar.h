@@ -8,7 +8,7 @@
 class Radar{
 public:
     pthread_t thread_id;
-    static ATCDashboard dashboard; //shared
+    //static ATCDashboard dashboard; //shared
 
     Radar():thread_id(-1){}
 
@@ -32,7 +32,7 @@ public:
                 int fd = open(AVN_FIFO1,O_WRONLY,0666);
                 write(fd,(void*)violationDetails,sizeof(ViolationInfo));
                 close(fd);
-                flight->flagged = true;
+                flight->numViolations++;
 
                 printf("--AVN DELIVERED--\n");
                 //get back fee info
@@ -60,6 +60,6 @@ public:
     }
 
 };
-ATCDashboard Radar::dashboard;
+//ATCDashboard Radar::dashboard;
 
 #endif

@@ -13,6 +13,8 @@ public:
     AirlineName airline;
     AirlineType airlineType;
     float speedRecorded;
+    float speedAllowedLower;
+    float speedAllowedUpper;
     FlightPhase phaseViolation;
     time_t violationTimestamp;
     //for AVN generator
@@ -26,15 +28,19 @@ public:
 
     AVN () {}
 
-    AVN(int flightID,AirlineName airline,AirlineType airlineType,float speedRecorded,FlightPhase phaseViolation,time_t violationTimestamp,float amountDue)
+    AVN(int flightID,AirlineName airline,AirlineType airlineType,float speedRecorded,FlightPhase phaseViolation,time_t violationTimestamp,float amountDue,float lowerLim,float upperLim)
     : flightID(flightID), airline(airline), airlineType(airlineType), speedRecorded(speedRecorded), phaseViolation(phaseViolation),violationTimestamp(violationTimestamp),amountDue(amountDue),dueDate(dueDate){
+
+        //speed allowed
+        this->speedAllowedLower = lowerLim;
+        this->speedAllowedUpper = upperLim;
 
         //due date
         std::chrono::system_clock::time_point tp = std::chrono::system_clock::from_time_t(violationTimestamp);
         auto futureTime = tp + std::chrono::hours(24 * 3); // add 3 days
         dueDate = std::chrono::system_clock::to_time_t(futureTime);
 
-        graphic.setSize(sf::Vector2f(200.f, 150.f)); 
+        graphic.setSize(sf::Vector2f(200.f, 120.f)); 
         graphic.setFillColor(sf::Color::Yellow);
         graphicX=0;
         graphicY=0;
@@ -51,16 +57,17 @@ public:
         std::cout << "> Due: " << ctime(&dueDate)<<std::endl;
     }
 
-    void initGraphic(float& maxX,float& maxY){
+    void initGraphic(float x,float y){
         std::ostringstream ss;
         ss << "AVN CHALLAN\n";
         ss << "AVN Issued: Flight " << flightID <<std::endl;
         ss << getAirlineName(airline) << ", " << getAirlineType(airlineType) << std::endl;
         ss << "Speed: " << speedRecorded<<" km/h\n";
         ss << "Phase: " << getPhase(phaseViolation)  << std::endl;
+        //ss << "allows " << speedAllowedLower << " - " << speedAllowedUpper << " kmh\n";
         ss << "Timestamp: " << ctime(&violationTimestamp);
-        ss << "Amount: $" << amountDue << std::endl;
-        ss << "Due: " << ctime(&dueDate);
+        //ss << "Amount: $" << amountDue << std::endl;
+        //ss << "Due: " << ctime(&dueDate);
         ss << "Status: " << (status? "paid":"unpaid");
     
         graphicText.setFont(globalFont);
@@ -69,14 +76,9 @@ public:
         graphicText.setString(ss.str());
 
         //position
-        graphic.setPosition(maxX,maxY);
-        printf("x=%f, y=%f\n",maxX,maxY);
-        if (maxX>600){
-            maxY = 80;
-            maxX = 240;
-        }
-        graphicText.setPosition(maxX,maxY);
-        maxY+=160;
+        graphic.setPosition(x,y);
+        graphicText.setPosition(x,y);
+
     }
     void drawGraphic(sf::RenderWindow& window){
         //printf("draw avn\n");

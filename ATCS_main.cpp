@@ -199,11 +199,9 @@ public:
         //Flight* dispatcher->currentFlight = nullptr;
         //Flight* dispatcher->currentFlight = dispatcher->dispatcher->currentFlight;
         int currentFlightID = -1;
-        int x=1;
 
         // START AIR TRAFFIC CONTROL OF ALL FLIGHTS BY FCFS/PRIORITY
         while (!upcomingFlights->isEmpty() || !waitingQueue->isEmpty() || Timer::currentTime < SIMULATION_DURATION) {
-
 
             //rwyC handle any reroutes
             if (dispatcher->runway=='C'){
@@ -523,13 +521,13 @@ int main() {
 
     Flight* f1 = new Flight(1, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA,1.0,'N');
     Flight* f2 = new Flight(2, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: MILITARY, AirlineName::Pakistan_Airforce,16,'S');
-    //rwyADispatcher.upcomingFlights->addFlight(f1);
-    //rwyADispatcher.upcomingFlights->addFlight(f2);
+    rwyADispatcher.upcomingFlights->addFlight(f1);
+    rwyADispatcher.upcomingFlights->addFlight(f2);
      
     Flight* f3 = new Flight(3, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: COMMERCIAL, AirlineName::FedEx,1.0,'W');
     Flight* f4 = new Flight(4, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: MEDICAL, AirlineName:: AghaKhan_Air_Ambulance,5.0,'E');
-    //rwyBDispatcher.upcomingFlights->addFlight(f4);
-    //rwyBDispatcher.upcomingFlights->addFlight(f3);
+    rwyBDispatcher.upcomingFlights->addFlight(f4);
+    rwyBDispatcher.upcomingFlights->addFlight(f3);
 
     Flight* f5 = new Flight(5, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: CARGO, AirlineName:: FedEx,1,'E');
     //Flight* f6 = new Flight(6, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: CARGO, AirlineName:: Blue_Dart);

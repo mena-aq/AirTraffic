@@ -29,7 +29,7 @@ public:
     bool faulty;
     PhaseRules flightPhases;
 
-    int flagged;
+    int numViolations;
 
     float xPos;
     float yPos;
@@ -38,7 +38,7 @@ public:
     sf::Text label;
 
 
-    Flight(int id, FlightType flightType, AirlineType airlineType, AirlineName name,float st, char dir ) :  id(id), direction(dir), scheduledTime(st), thread_id(-1), radar_id(-1), airlineName(name), airlineType(airlineType), flightType(flightType), waitingTime(0),acceptEmergency(false), faulty(false), flagged(false){    
+    Flight(int id, FlightType flightType, AirlineType airlineType, AirlineName name,float st, char dir ) :  id(id), direction(dir), scheduledTime(st), thread_id(-1), radar_id(-1), airlineName(name), airlineType(airlineType), flightType(flightType), waitingTime(0),acceptEmergency(false), faulty(false), numViolations(0){    
         
         if (flightType == FlightType::DOMESTIC_ARRIVAL || flightType == FlightType::INTERNATIONAL_ARRIVAL) {
             phase = FlightPhase::HOLDING; // if its arriving, start phase is holding

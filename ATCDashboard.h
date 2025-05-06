@@ -6,6 +6,7 @@
 
 class ATCDashboard {
 public:
+    PhaseRules rules;
     int numViolations;
     std::vector<AVN> AVNs;
     float max_Y;
@@ -18,8 +19,11 @@ public:
     }
 
     void addAVN(ViolationInfo* violation){
-        AVN avn(violation->flightID,static_cast<AirlineName>(violation->airline),static_cast<AirlineType>(violation->airlineType),violation->speedRecorded,static_cast<FlightPhase>(violation->phaseViolation),violation->violationTimestamp,violation->amountDue);
+        float lowerLim = rules[(int)violation->phaseViolation].speedLowerLimit;
+        float upperLim = rules[(int)violation->phaseViolation].speedUpperLimit;
+        AVN avn(violation->flightID,static_cast<AirlineName>(violation->airline),static_cast<AirlineType>(violation->airlineType),violation->speedRecorded,static_cast<FlightPhase>(violation->phaseViolation),violation->violationTimestamp,violation->amountDue,lowerLim,upperLim);
         avn.initGraphic(max_X,max_Y);
+        max_Y+= 140;
         AVNs.push_back(avn);
         printAVNs();
     }
