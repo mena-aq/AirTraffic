@@ -12,11 +12,15 @@ public:
     sf::Font font;
     Flight* flight;
 
+    sf::RectangleShape bar;
+
     FlightCard(Flight* flight,float x,float y){
-        details.setPosition(x,y);
         details.setFont(globalFont);
         details.setFillColor(sf::Color::Yellow);  
         details.setCharacterSize(12);
+        bar.setSize(sf::Vector2f(3,80));
+        bar.setFillColor(getAirlineColorCode(flight->airlineName));
+        setPosition(x,y);
         this->flight = flight;
     }
 
@@ -24,6 +28,7 @@ public:
         this->x = x;
         this->y = y;
         details.setPosition(this->x,this->y);
+        bar.setPosition((this->x)-5,(this->y)+5);
     }
 
     void drawCard(sf::RenderWindow& window){
@@ -40,6 +45,7 @@ public:
             details.setString(ss.str());
         }
         window.draw(details);
+        window.draw(bar);
     }
 
 };

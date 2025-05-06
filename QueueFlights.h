@@ -37,6 +37,14 @@ public:
         else 
             return nullptr;
     }
+    Flight* peekNextFlight(){
+        if (!flightQueue.empty()){
+            Flight* nextFlight = flightQueue.front();
+            return nextFlight;
+        }
+        else 
+            return nullptr;
+    }
     bool isEmpty(){
         return flightQueue.empty();
     }

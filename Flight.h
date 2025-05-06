@@ -103,7 +103,10 @@ public:
         label.setFont(globalFont);
         string lbl = "ID: " + to_string(this->id);
         label.setString(lbl);
-        label.setCharacterSize(14);
+        label.setCharacterSize(15);
+        label.setFillColor(getAirlineColorCode(this->airlineName));
+        label.setOutlineColor(sf::Color::White);
+        label.setOutlineThickness(2); 
     }
     bool checkViolation() {
         Phase p = flightPhases[(int)phase];
@@ -152,6 +155,57 @@ public:
     bool isInternational(){
         return (this->flightType == FlightType::INTERNATIONAL_ARRIVAL || this->flightType == FlightType::INTERNATIONAL_DEPARTURE);
 
+    }
+
+    bool isEmergency(){
+        return (this->airlineType==AirlineType::MEDICAL || this->airlineType==AirlineType::MILITARY);
+    }
+
+    void sendBackToGate(){
+        if (this->direction == 'E'){
+            sprite.setRotation(-90.f);
+            this->xPos = 220;
+            this->yPos = 230;
+            updatePosition();
+        }
+        else if (this->direction == 'W'){
+            sprite.setRotation(90.f);
+            this->xPos = 750;
+            this->yPos = 200;
+            updatePosition();
+        }
+    }
+
+    void sendBackToHolding(){
+        if (this->direction == 'N'){
+            sprite.setRotation(180.f);
+            this->xPos = 900;
+            this->yPos = -220;
+            updatePosition();
+        }
+        else if (this->direction == 'S'){
+            this->xPos = 900;
+            this->yPos = 1080;
+            updatePosition();
+        }
+        if (this->isArrival() && airlineType == AirlineType::CARGO){
+            this->xPos = 1150;
+            this->yPos = 450;
+            updatePosition();
+        }
+    }
+
+    void useArrivalEmergencyRoute(){ //rwyC arrival
+        this->xPos = 1150; 
+        this->yPos = 450;
+        updatePosition();
+    }
+
+    void useDepartureEmergencyRoute(){ //rwyC departure
+        sprite.setRotation(-90.f);
+        this->xPos = 220;
+        this->yPos = 230;
+        updatePosition();
     }
 
     //operator for priority 

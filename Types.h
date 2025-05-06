@@ -132,6 +132,17 @@ std::string getAirlineType(AirlineType airlineType){
     }
     return "";
 }
+sf::Color getAirlineColorCode(AirlineName airline){
+    switch (airline) {
+        case PIA: return sf::Color(0,100,0); break; //dark green
+        case AirBlue: return sf::Color::Blue ; break;
+        case FedEx: return sf::Color(128, 0, 128); break; //purple
+        case Pakistan_Airforce: return sf::Color(101, 67, 33) ; break; //dark brown
+        case Blue_Dart: return sf::Color(135, 206, 235); break; //sky blue
+        case AghaKhan_Air_Ambulance: return sf::Color::Red; break;
+    }
+    return sf::Color::White;
+}
 
 //font
 sf::Font globalFont;
