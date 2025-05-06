@@ -24,6 +24,7 @@ public:
     float fuelLevel; //in gallons
     float waitingTime; 
     float scheduledTime;
+    bool acceptEmergency;
 
     bool faulty;
     PhaseRules flightPhases;
@@ -37,7 +38,7 @@ public:
     sf::Text label;
 
 
-    Flight(int id, FlightType flightType, AirlineType airlineType, AirlineName name,float st, char dir ) :  id(id), direction(dir), scheduledTime(st), thread_id(-1), radar_id(-1), airlineName(name), airlineType(airlineType), flightType(flightType), waitingTime(0), faulty(false), flagged(false){    
+    Flight(int id, FlightType flightType, AirlineType airlineType, AirlineName name,float st, char dir ) :  id(id), direction(dir), scheduledTime(st), thread_id(-1), radar_id(-1), airlineName(name), airlineType(airlineType), flightType(flightType), waitingTime(0),acceptEmergency(false), faulty(false), flagged(false){    
         
         if (flightType == FlightType::DOMESTIC_ARRIVAL || flightType == FlightType::INTERNATIONAL_ARRIVAL) {
             phase = FlightPhase::HOLDING; // if its arriving, start phase is holding
@@ -86,7 +87,7 @@ public:
         else if (this->direction == 'N'){
             sprite.setRotation(180.f);
             this->xPos = 900;
-            this->yPos = -220;
+            this->yPos = -250;
             updatePosition();
         }
         else if (this->direction == 'S'){
@@ -95,7 +96,8 @@ public:
             updatePosition();
         }
         if (this->isArrival() && airlineType == AirlineType::CARGO){//special case of emergency arrival
-            this->xPos = 1150;
+            sprite.setRotation(-90.f);
+            this->xPos = 1100;
             this->yPos = 450;
             updatePosition();
         }
@@ -180,7 +182,7 @@ public:
         if (this->direction == 'N'){
             sprite.setRotation(180.f);
             this->xPos = 900;
-            this->yPos = -220;
+            this->yPos = -220;                 ///// CHANGE!!!!!!!!!!!!!!!
             updatePosition();
         }
         else if (this->direction == 'S'){
@@ -189,19 +191,22 @@ public:
             updatePosition();
         }
         if (this->isArrival() && airlineType == AirlineType::CARGO){
-            this->xPos = 1150;
+            this->xPos = 1100;
             this->yPos = 450;
             updatePosition();
         }
     }
 
     void useArrivalEmergencyRoute(){ //rwyC arrival
+        printf("use arrival emergency route\n");
+        sprite.setRotation(-90.f);
         this->xPos = 1150; 
         this->yPos = 450;
         updatePosition();
     }
 
     void useDepartureEmergencyRoute(){ //rwyC departure
+        printf("use arrival emergency route\n");
         sprite.setRotation(-90.f);
         this->xPos = 220;
         this->yPos = 230;
@@ -458,9 +463,6 @@ public:
             this->spriteAltitudeDown();
             this->consumeFuel();
             printf("flight %d : approach, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceToRunway);
-            if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
-                return 0;
-            }
             sleep(1);
             //usleep(1000);
         }
@@ -544,7 +546,7 @@ public:
             this->altitude -= 40; 
             this->updatePosition();
             this->consumeFuel();
-            printf("flight %d : holding->approach, speed=%f, altitude=%f, dist=%f\n", this->id, this->speed,this->altitude,distanceToRunway);
+            //printf("flight %d : holding->approach, speed=%f, altitude=%f, dist=%f\n", this->id, this->speed,this->altitude,distanceToRunway);
             if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
                 return 0; //exit w/ unfinished status
             }
@@ -561,10 +563,7 @@ public:
             this->updatePosition();
             //this->spriteAltitudeDown();
             this->consumeFuel();
-            printf("flight %d : approach, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceToRunway);
-            if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
-                return 0;
-            }
+            //printf("flight %d : approach, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceToRunway);
             sleep(1);
             //usleep(100000);
         }
@@ -586,7 +585,7 @@ public:
             this->updatePosition();
             this->spriteAltitudeDown();
             this->consumeFuel();
-            printf("flight %d : landing, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceAlongRunway);
+            //printf("flight %d : landing, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceAlongRunway);
             //sleep(1);
             //if (yPos>540)
                 //break;
@@ -750,7 +749,7 @@ public:
 
     int simulateEmergencyFlightArrival(bool flightTurn[]){  
     
-        printf(" ARRIVAL :flight ID: %d\n",this->id);
+        printf("EMERGENCY ARRIVAL :flight ID: %d\n",this->id);
     
         // ------------- SIMULATE --------------
     
@@ -784,18 +783,15 @@ public:
             //this->spriteAltitudeDown();
             this->consumeFuel();
             printf("flight %d : approach, speed=%f, altitude=%f, dist=%f\n",this->id, this->speed,this->altitude,distanceToRunway);
-            if (!flightTurn[this->id-1]){ // somebody pre-empted it, go back to holding
-                return 0;
-            }
-            sleep(1);
             //usleep(100000);
+            sleep(1);
         }
         step *= 1.6;
         //LANDING
         this->phase = FlightPhase::LANDING;
         float distanceAlongRunway = distanceToRunway+RUNWAY_LEN; 
         while ( this->altitude>0 || xPos > 140){
-            float a = -30250 + (50-rand()%100);
+            float a = -20750 + (50-rand()%100);
             if (this->speed > 32)
                 this->speed += a*(1.0/3600); //v=u+at
             this->xPos -= this->speed * step;
@@ -861,7 +857,7 @@ public:
     void updatePosition(){
         sprite.setPosition(this->xPos,this->yPos);
         label.setPosition(this->xPos,this->yPos);
-        printf("x=%f, y=%f\n",xPos,yPos); 
+        printf("flight %d : x=%f, y=%f\n",id,xPos,yPos); 
     }
 
     void spriteAltitudeUp(){

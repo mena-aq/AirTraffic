@@ -4,8 +4,20 @@
 #include "Flight.h"
 
 class QueueFlights {
+private:
+    pthread_mutex_t lock;
 public:
     vector<Flight*> flightQueue;
+
+    QueueFlights(){
+        pthread_mutex_init(&lock,NULL);
+    }
+    void lockQueue(){
+        pthread_mutex_lock(&lock);
+    }
+    void unlockQueue(){
+        pthread_mutex_unlock(&lock);
+    }
     
     // Helper to sort a vector based on Comparator
     void sortQueue() {

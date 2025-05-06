@@ -26,7 +26,7 @@ void* simulateWaitingAtGate(void* arg){
 
     args* flightArg = static_cast<args*>(arg);
     Flight* flight = flightArg->flight;
-    const char runwayToAcquire = flightArg->runway;
+    char runwayToAcquire = flightArg->runway;
     cout<<"at gate flight: "<< flight->id<<endl;
 
     int status = 0;
@@ -46,6 +46,10 @@ void* simulateWaitingAtGate(void* arg){
             sleep(1);
             if (int(flight->waitingTime)%100 == 0)
                 flight->priority++; //up the priority every 100s
+        }
+
+        if (flight->acceptEmergency){//if rerouted
+            runwayToAcquire = 'C';
         }
 
         if (runwayToAcquire=='C'){
@@ -80,7 +84,7 @@ void* simulateWaitingInHolding(void* arg){
 
     args* flightArg = static_cast<args*>(arg);
     Flight* flight = flightArg->flight;
-    const char runwayToAcquire = flightArg->runway;
+    char runwayToAcquire = flightArg->runway;
     cout<<"IN holding flight: "<< flight->id<<endl;
 
     int status =0;
@@ -95,6 +99,10 @@ void* simulateWaitingInHolding(void* arg){
             if (int(flight->waitingTime)%100 == 0)
                 flight->priority++; //up the priority every 100s
             sleep(1);
+        }
+
+        if (flight->acceptEmergency){//if rerouted
+            runwayToAcquire = 'C';
         }
             
         if (runwayToAcquire=='C'){
@@ -137,11 +145,13 @@ public:
     static pthread_t radarTid[TOTAL_FLIGHTS]; //all radar thread ids
     
     //for all simulation flights 
-    QueueFlights* internationalFlights;
-    QueueFlights* domesticFlights;
+    //QueueFlights* internationalFlights;
+    //QueueFlights* domesticFlights;
+    QueueFlights* upcomingFlights;
     //for those whose arrival time has occured
-    QueueFlights* internationalWaitingQueue; 
-    QueueFlights* domesticWaitingQueue;
+    //QueueFlights* internationalWaitingQueue; 
+    //QueueFlights* domesticWaitingQueue;
+    QueueFlights* waitingQueue;
     //current
     Flight* currentFlight;
     //any reroute flights
@@ -153,11 +163,9 @@ public:
     //graphics
     static FlightPanel flightPanel; 
 
-    Dispatcher(char runway,QueueFlights*& domesticQueue, QueueFlights*& interQueue): runway(runway){
-        this->internationalFlights= interQueue;
-        this->domesticFlights= domesticQueue;
-        internationalWaitingQueue= new QueueFlights;
-        domesticWaitingQueue = new QueueFlights;
+    Dispatcher(char runway,QueueFlights*& upcomingQueue): runway(runway){
+        this->upcomingFlights = upcomingQueue;
+        this->waitingQueue= new QueueFlights;
         this->currentFlight = nullptr;
 
     }
@@ -166,18 +174,15 @@ public:
 
         Dispatcher* dispatcher = (Dispatcher*)(arg);
 
-        dispatcher->internationalFlights->sortQueue2();
-        dispatcher->domesticFlights->sortQueue2();
+        dispatcher->upcomingFlights->sortQueue2();
         
-        QueueFlights* internationalFlightsQueue = dispatcher->internationalFlights;
-        QueueFlights* domesticFlightsQueue = dispatcher->domesticFlights;
-        QueueFlights* internationalWaitingQueue = dispatcher->internationalWaitingQueue; 
-        QueueFlights* domesticWaitingQueue = dispatcher->domesticWaitingQueue; 
+        QueueFlights* upcomingFlights = dispatcher->upcomingFlights;
+        QueueFlights* waitingQueue = dispatcher->waitingQueue;
 
         //first launch all the flights
         //international flights
-        for (int i=0; i<internationalFlightsQueue->numInQueue(); i++){ 
-            Flight* flight = (*internationalFlightsQueue)[i]; 
+        for (int i=0; i<upcomingFlights->numInQueue(); i++){ 
+            Flight* flight = (*upcomingFlights)[i]; 
             int index = (flight->id) - 1;
             args* flightArg = new args;
             flightArg->flight = flight;
@@ -189,20 +194,6 @@ public:
             flight->thread_id = flightTid[index]; 
             pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
         }
-        //domestic flights
-        for (int i=0; i<domesticFlightsQueue->numInQueue(); i++){ 
-            Flight* flight = (*domesticFlightsQueue)[i]; 
-            int index = (flight->id) - 1;
-            args* flightArg = new args;
-            flightArg->flight = flight;
-            flightArg->runway = dispatcher->runway;
-            if (flight->isArrival())
-                pthread_create(&flightTid[index],NULL,simulateWaitingInHolding,(void*)flightArg);
-            else
-                pthread_create(&flightTid[index],NULL,simulateWaitingAtGate,(void*)flightArg);
-                flight->thread_id = flightTid[index]; 
-            pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
-        }
         sleep(1); //this is the bandaid holding this tgt
 
         //Flight* dispatcher->currentFlight = nullptr;
@@ -211,96 +202,47 @@ public:
         int x=1;
 
         // START AIR TRAFFIC CONTROL OF ALL FLIGHTS BY FCFS/PRIORITY
-        while ( !internationalFlightsQueue->isEmpty() || !domesticFlightsQueue->isEmpty() || !domesticWaitingQueue->isEmpty() || !internationalWaitingQueue->isEmpty()/*&& Timer::currentTime < SIMULATION_DURATION*/) {
+        while (!upcomingFlights->isEmpty() || !waitingQueue->isEmpty() || Timer::currentTime < SIMULATION_DURATION) {
 
-            //dispatch the front (FCFS) if time for it 
-            Flight* readyInternational = nullptr;
-            Flight* readyDomestic = nullptr;
 
             //rwyC handle any reroutes
             if (dispatcher->runway=='C'){
-                if (reroute){
-                    
+                if (reroute){ //if any reorute take it
+                    printf("rwyC accept reroute\n");
+                    reroute->acceptEmergency = true;
+                    if (reroute->isArrival())
+                        reroute->useArrivalEmergencyRoute();
+                    else
+                        reroute->useDepartureEmergencyRoute();
+                    waitingQueue->addFlightAtFront(reroute);
                     reroute = nullptr;
+                    dispatcher->waitingQueue->unlockQueue();
                     openForReroute = false;
+                    //printf("closed for reroute\n");
+                }
+                if (waitingQueue->isEmpty()){ //if free open to reroutes
+                    openForReroute = true;
                 }
             }
             
-            if (dispatcher->runway == 'A' || dispatcher->runway == 'C'){
-                if (!internationalFlightsQueue->isEmpty() && Timer::currentTime >= internationalFlightsQueue->peekNextFlight()->scheduledTime){ //move an international arrival to waiting Q
-                    readyInternational = internationalFlightsQueue->getNextFlight();
-                    if (readyInternational->isArrival()){
-                        internationalWaitingQueue->addFlight(readyInternational); //add to waiting
-                        printf("time for flight %d\n",readyInternational->id);
-                        dispatcher->flightPanel.addCard(readyInternational);
-                    }
-                    else
-                        internationalFlightsQueue->addFlightAtFront(readyInternational); //add back (C)
-                }
-                if (!domesticFlightsQueue->isEmpty() && Timer::currentTime >= domesticFlightsQueue->peekNextFlight()->scheduledTime){ //move a domestic arrival to waiting Q
-                    readyDomestic = domesticFlightsQueue->getNextFlight();
-                    if (readyDomestic->isArrival()){
-                        printf("time for flight %d\n",readyDomestic->id);
-                        domesticWaitingQueue->addFlight(readyDomestic);
-                        dispatcher->flightPanel.addCard(readyDomestic);
-                    }
-                    else
-                        domesticFlightsQueue->addFlightAtFront(readyDomestic);
-                }
-            }
-            if (dispatcher->runway == 'B' || dispatcher->runway == 'C'){
-                if (!internationalFlightsQueue->isEmpty() && Timer::currentTime >= internationalFlightsQueue->peekNextFlight()->scheduledTime){ //move a international departure to waiting Q
-                    readyInternational = internationalFlightsQueue->getNextFlight();
-                    if (readyInternational->isDeparture()){
-                        printf("time for flight %d\n",readyInternational->id);
-                        internationalWaitingQueue->addFlight(readyInternational); //add to waiting
-                        dispatcher->flightPanel.addCard(readyInternational);
-                    }
-                    else
-                        internationalFlightsQueue->addFlightAtFront(readyInternational); //add back (C)
-                }
-                if (!domesticFlightsQueue->isEmpty() && Timer::currentTime >= domesticFlightsQueue->peekNextFlight()->scheduledTime){ //move a domestic departure to waiting Q
-                    readyDomestic = domesticFlightsQueue->getNextFlight();
-                    if (readyDomestic->isDeparture()){
-                        domesticWaitingQueue->addFlight(readyDomestic);
-                        printf("time for flight %d\n",readyDomestic->id);
-                        dispatcher->flightPanel.addCard(readyDomestic);
-                    }
-                    else
-                        domesticFlightsQueue->addFlightAtFront(readyDomestic);                
-                }
+            //dispatch the front (FCFS) if time for it 
+            Flight* ready = nullptr;
+            while (!upcomingFlights->isEmpty() && Timer::currentTime >= upcomingFlights->peekNextFlight()->scheduledTime){ //move to waiting Q
+                dispatcher->waitingQueue->lockQueue();
+                ready = upcomingFlights->getNextFlight();
+                waitingQueue->addFlight(ready);
+                if (dispatcher->runway=='C')
+                    openForReroute = false;
+                printf("time for flight %d\n",ready->id);
+                dispatcher->flightPanel.addCard(ready);
+                dispatcher->waitingQueue->unlockQueue();
             }
 
-            //sort the waiting Qs to choose priority flights
-            internationalWaitingQueue->sortQueue();
-            domesticWaitingQueue->sortQueue();
+            
+            //sort the waiting Q to choose priority flights
+            waitingQueue->sortQueue();
 
-            Flight* nextInternational = nullptr;
-            Flight* nextDomestic = nullptr;
-
-            if (!internationalWaitingQueue->isEmpty())
-                nextInternational = internationalWaitingQueue->getNextFlight();
-            if (!domesticWaitingQueue->isEmpty())
-                nextDomestic = domesticWaitingQueue->getNextFlight();
-
-            //if none do nothing
-            //if both choose one
-            Flight* nextFlight = nullptr;
-            if (nextInternational && nextDomestic){
-                nextFlight = ( nextDomestic->priority > nextInternational->priority? nextDomestic:nextInternational);
-                if(nextFlight != nextDomestic){
-                    domesticWaitingQueue->addFlightAtFront(nextDomestic);
-                    nextDomestic = nullptr;
-                }
-                else if (nextFlight != nextInternational){
-                    internationalWaitingQueue->addFlightAtFront(nextInternational);
-                    nextInternational = nullptr;
-                }
-            }
-            else if (nextInternational && !nextDomestic)
-                nextFlight = nextInternational;
-            else if (nextDomestic && !nextInternational)
-                nextFlight = nextDomestic;
+            Flight* nextFlight = waitingQueue->getNextFlight();
 
             // check if anyone currently running do we pre-empt
             if (nextFlight != nullptr) {
@@ -312,15 +254,12 @@ public:
                 }
                 else{
                     //check if can pre-empt
-                    if (dispatcher->runway == 'A' && nextFlight->priority > dispatcher->currentFlight->priority && dispatcher->currentFlight->phase < FlightPhase::LANDING){
+                    if (dispatcher->runway == 'A' && nextFlight->priority > dispatcher->currentFlight->priority && dispatcher->currentFlight->phase < FlightPhase::APPROACH){
                         //pre-empt current
                         printf("flight %d pre=empting flight %d\n",nextFlight->id,dispatcher->currentFlight->id);
                         flightTurn[dispatcher->currentFlight->id - 1]=false;
                         //add pre-rempted flight back
-                        if (dispatcher->currentFlight->isInternational())
-                            internationalWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
-                        else
-                            domesticWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
+                        waitingQueue->addFlightAtFront(dispatcher->currentFlight);
                         sleep(1); //give it some time to go back to holding
                         flightTurn [nextFlight->id-1] = true;
                         dispatcher->currentFlight = nextFlight;
@@ -331,10 +270,7 @@ public:
                         printf("flight %d pre=empting flight %d\n",nextFlight->id,dispatcher->currentFlight->id);
                         flightTurn[dispatcher->currentFlight->id - 1]=false;
                         //add pre-rempted flight back
-                        if (dispatcher->currentFlight->isInternational())
-                            internationalWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
-                        else
-                            domesticWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
+                        waitingQueue->addFlightAtFront(dispatcher->currentFlight);
                         sleep(1); //give it some time to go back to holding
                         flightTurn [nextFlight->id-1] = true;
                         dispatcher->currentFlight = nextFlight;
@@ -344,62 +280,24 @@ public:
                         //if opposite types, if current flight is departure and < takeoff, preempt
                         // else dont preempt
                         // of same types so check for each type, and their phases and preempt accordingly
-                        if(dispatcher->currentFlight->isArrival() && dispatcher->currentFlight->phase<FlightPhase:: LANDING
-                            &&nextFlight->isDeparture()){
+                        if(dispatcher->currentFlight->isArrival() && dispatcher->currentFlight->phase<FlightPhase:: LANDING){
                             //pre-empt current
                             printf("flight %d pre=empting flight %d\n",nextFlight->id,dispatcher->currentFlight->id);
                             flightTurn[dispatcher->currentFlight->id -1]=false;
                             //add pre-rempted flight back
-                            if (dispatcher->currentFlight->isInternational())
-                                internationalWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
-                            else
-                                domesticWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
+                            waitingQueue->addFlightAtFront(dispatcher->currentFlight);
                             sleep(1);
                             flightTurn[nextFlight->id -1]=true;
                             dispatcher->currentFlight = nextFlight;
                             currentFlightID = dispatcher->currentFlight->id;
 
                         }
-                        else if( dispatcher->currentFlight->isDeparture() && dispatcher->currentFlight->phase<FlightPhase:: TAKEOFF
-                            &&nextFlight->isArrival()){
+                        else if( dispatcher->currentFlight->isDeparture() && dispatcher->currentFlight->phase<FlightPhase:: TAKEOFF){
                             //pre-empt current
                             printf("flight %d pre=empting flight %d\n",nextFlight->id,dispatcher->currentFlight->id);
                             flightTurn[dispatcher->currentFlight->id -1]=false;
                             //add pre-rempted flight back
-                            if (dispatcher->currentFlight->isInternational())
-                                internationalWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
-                            else
-                                domesticWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
-                            sleep(1);
-                            flightTurn[nextFlight->id -1]=true;
-                            dispatcher->currentFlight = nextFlight;
-                            currentFlightID = dispatcher->currentFlight->id;
-
-                        }
-                        else if(dispatcher->currentFlight->isArrival() &&dispatcher->currentFlight->phase<FlightPhase:: LANDING){
-                            //pre-empt current
-                            printf("flight %d pre=empting flight %d\n",nextFlight->id,dispatcher->currentFlight->id);   
-                            flightTurn[dispatcher->currentFlight->id -1]=false;
-                            //add pre-rempted flight back
-                            if (dispatcher->currentFlight->isInternational())
-                                internationalWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
-                            else
-                                domesticWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
-                            sleep(1);
-                            flightTurn[nextFlight->id -1]=true;
-                            dispatcher->currentFlight = nextFlight;
-                            currentFlightID = dispatcher->currentFlight->id;
-
-                        }
-                        else if(dispatcher->currentFlight->isDeparture() &&dispatcher->currentFlight->phase<FlightPhase:: TAKEOFF){
-                            //pre-empt current
-                            printf("flight %d pre=empting flight %d\n",nextFlight->id,dispatcher->currentFlight->id);
-                            flightTurn[dispatcher->currentFlight->id -1]=false;
-                            //add pre-rempted flight back
-                            if (dispatcher->currentFlight->isInternational())
-                                internationalWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
-                            else
-                                domesticWaitingQueue->addFlightAtFront(dispatcher->currentFlight);
+                            waitingQueue->addFlightAtFront(dispatcher->currentFlight);
                             sleep(1);
                             flightTurn[nextFlight->id -1]=true;
                             dispatcher->currentFlight = nextFlight;
@@ -409,24 +307,21 @@ public:
 
                     }
                     else{ //cannot pre-empt
-
-                        //if rwy A or rwyB see if rwyC is free and send to that dispatcher?
+                        printf("cannot pre-empt\n");
+                        //if rwy A or rwyB see if rwyC is free and send to that dispatcher
                         if ((dispatcher->runway == 'A' || dispatcher->runway == 'B') && nextFlight->isEmergency() && openForReroute){
                             openForReroute = false;
                             reroute = nextFlight;
+                            printf("flight %d rerouted to rwyC\n",reroute->id);
+                            dispatcher->waitingQueue->lockQueue();//lock so no one enters C waiting b4 this
                         }
                         else{ //not emergency/C in use dont send
-                            if(nextFlight->isDomestic())
-                                domesticWaitingQueue->addFlightAtFront(nextFlight);
-                            else if (nextFlight->isInternational()){
-                                internationalWaitingQueue->addFlightAtFront(nextFlight);
-                            }
+                            waitingQueue->addFlightAtFront(nextFlight);
                         }
                     }
                 }
                 nextFlight = nullptr;
             }
-
 
 
             if (dispatcher->currentFlight && dispatcher->currentFlight->phase == FlightPhase::DONE){ //its done
@@ -446,11 +341,8 @@ public:
 
     void drawFlights(Dispatcher* dispatcher,sf::RenderWindow& window){
         //draw waiting flights
-        for (int i=0; i<internationalWaitingQueue->numInQueue(); i++){
-            (*internationalWaitingQueue)[i]->draw(window);
-        }
-        for (int i=0; i<domesticWaitingQueue->numInQueue(); i++){
-            (*domesticWaitingQueue)[i]->draw(window);
+        for (int i=0; i<waitingQueue->numInQueue(); i++){
+            (*waitingQueue)[i]->draw(window);
         }
         //draw current flight
         if (dispatcher->currentFlight){
@@ -539,21 +431,21 @@ int main() {
     loadFont();
 
     // INPUT FLIGHTS
-    QueueFlights* rwyAInternationalFlights = new QueueFlights;
-    QueueFlights* rwyADomesticFlights = new QueueFlights;
+    QueueFlights* rwyAFlights = new QueueFlights;
+    //QueueFlights* rwyADomesticFlights = new QueueFlights;
 
-    QueueFlights* rwyBInternationalFlights = new QueueFlights;
-    QueueFlights* rwyBDomesticFlights = new QueueFlights;
+    QueueFlights* rwyBFlights = new QueueFlights;
+    //QueueFlights* rwyBDomesticFlights = new QueueFlights;
 
-    QueueFlights* rwyCInternationalFlights = new QueueFlights;
-    QueueFlights* rwyCDomesticFlights = new QueueFlights;
+    QueueFlights* rwyCFlights = new QueueFlights;
+    //QueueFlights* rwyCDomesticFlights = new QueueFlights;
 
     //make dispatchers for 3 runways (A is for arrival, B for departure and C for cargo (dept and arr))
-    Dispatcher rwyADispatcher('A',rwyADomesticFlights,rwyAInternationalFlights);
-    Dispatcher rwyBDispatcher('B',rwyBDomesticFlights,rwyBInternationalFlights);
-    Dispatcher rwyCDispatcher('C',rwyCDomesticFlights,rwyCInternationalFlights);
+    Dispatcher rwyADispatcher('A',rwyAFlights);
+    Dispatcher rwyBDispatcher('B',rwyBFlights);
+    Dispatcher rwyCDispatcher('C',rwyCFlights);
     
-    /*
+/*
     cout<<"        Airline          |    Type        | Flights\n";
     cout<<"---------------------------------------------------\n";
     cout<<"PIA                      | Commercial     | 4\n";
@@ -619,7 +511,7 @@ int main() {
         }
         f->printStatus();
     }
-    */
+*/
 
 
     pthread_t dispatcherA;
@@ -630,23 +522,23 @@ int main() {
     pthread_t timerThread;
 
     Flight* f1 = new Flight(1, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA,1.0,'N');
-    Flight* f2 = new Flight(2, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: MILITARY, AirlineName::Pakistan_Airforce,1.30,'S');
-    //rwyADispatcher.internationalFlights->addFlight(f1);
-    //rwyADispatcher.domesticFlights->addFlight(f2);
+    Flight* f2 = new Flight(2, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: MILITARY, AirlineName::Pakistan_Airforce,16,'S');
+    //rwyADispatcher.upcomingFlights->addFlight(f1);
+    //rwyADispatcher.upcomingFlights->addFlight(f2);
      
     Flight* f3 = new Flight(3, FlightType:: DOMESTIC_DEPARTURE, AirlineType:: COMMERCIAL, AirlineName::FedEx,1.0,'W');
     Flight* f4 = new Flight(4, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: MEDICAL, AirlineName:: AghaKhan_Air_Ambulance,5.0,'E');
-    rwyBDispatcher.internationalFlights->addFlight(f4);
-    rwyBDispatcher.domesticFlights->addFlight(f3);
+    //rwyBDispatcher.upcomingFlights->addFlight(f4);
+    //rwyBDispatcher.upcomingFlights->addFlight(f3);
 
-    //Flight* f5 = new Flight(5, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: CARGO, AirlineName:: FedEx);
+    Flight* f5 = new Flight(5, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: CARGO, AirlineName:: FedEx,1,'E');
     //Flight* f6 = new Flight(6, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: CARGO, AirlineName:: Blue_Dart);
-    //rwyCDispatcher.domesticFlights->addFlight(f5);
+    rwyCDispatcher.upcomingFlights->addFlight(f5);
     //rwyCDispatcher.internationalFlights->addFlight(f6);
 
     pthread_create(&dispatcherA, nullptr, Dispatcher::dispatchFlights, (void*)&rwyADispatcher);   
     pthread_create(&dispatcherB, nullptr, Dispatcher::dispatchFlights, (void*)&rwyBDispatcher);
-    //pthread_create(&dispatcherC, nullptr, Dispatcher::dispatchFlights, (void*)&rwyCDispatcher);
+    pthread_create(&dispatcherC, nullptr, Dispatcher::dispatchFlights, (void*)&rwyCDispatcher);
 
     sleep(1);
     pthread_create(&timerThread,NULL,timer.simulationTimer,NULL);
@@ -672,7 +564,7 @@ int main() {
         window.draw(backgroundSprite);
         rwyADispatcher.drawFlights(&rwyADispatcher,window);
         rwyBDispatcher.drawFlights(&rwyBDispatcher,window);
-        //rwyCDispatcher.drawFlights(window);
+        rwyCDispatcher.drawFlights(&rwyCDispatcher,window);
         window.display();
     }
 
