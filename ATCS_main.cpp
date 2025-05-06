@@ -135,7 +135,8 @@ void* simulateWaitingInHolding(void* arg){
 
 class Dispatcher{
 public:
-    Radar radar;
+
+    static Radar radar;
 
     pthread_mutex_t turnLock;
     pthread_cond_t cond;
@@ -192,7 +193,7 @@ public:
             else
                 pthread_create(&flightTid[index],NULL,simulateWaitingAtGate,(void*)flightArg);
             flight->thread_id = flightTid[index]; 
-            pthread_create(&(flight->radar_id), nullptr, dispatcher->radar.flightRadar, (void*)flight);
+            pthread_create(&(flight->radar_id), nullptr, Radar::flightRadar, (void*)flight);
         }
         sleep(1); //this is the bandaid holding this tgt
 
@@ -350,11 +351,13 @@ public:
         flightPanel.displayPanel(window);
 
         //draw AVNS
+        radar.drawGraphic(window);
         //dispatcher->radar.dashboard.displayAVNs(aWindow);
 
     }
 
 };
+Radar Dispatcher::radar;
 pthread_t Dispatcher::flightTid[TOTAL_FLIGHTS];
 pthread_t Dispatcher::radarTid[TOTAL_FLIGHTS];
 bool Dispatcher::openForReroute = true;

@@ -7,10 +7,21 @@
 
 class Radar{
 public:
-    pthread_t thread_id;
+    //pthread_t thread_id;
     //static ATCDashboard dashboard; //shared
 
-    Radar():thread_id(-1){}
+    static vector<Flight*> flaggedFlights;
+
+    static sf::Text list;
+
+    Radar(){
+        list.setFont(globalFont);
+        list.setFillColor(sf::Color::Red); 
+        list.setOutlineColor(sf::Color::White);
+        list.setOutlineThickness(2); 
+        list.setCharacterSize(13);
+        list.setPosition(10,200);
+    }
 
     //radar thread function (per flight)
     static void* flightRadar(void* arg){
@@ -33,6 +44,9 @@ public:
                 write(fd,(void*)violationDetails,sizeof(ViolationInfo));
                 close(fd);
                 flight->numViolations++;
+                if (flight->numViolations==1)
+                    flaggedFlights.push_back(flight);
+                displayFlaggedFlights();
 
                 printf("--AVN DELIVERED--\n");
                 //get back fee info
@@ -59,7 +73,20 @@ public:
         pthread_exit(nullptr);
     }
 
+    static void displayFlaggedFlights(){
+        std::ostringstream ss;
+        for (int i=0; i<flaggedFlights.size(); i++){
+            ss << "> Flight " << flaggedFlights[i]->id << std::endl;
+            ss << flaggedFlights[i]->numViolations << " violations\n";
+        }
+        list.setString(ss.str());
+    }
+    void drawGraphic(sf::RenderWindow& window){
+        window.draw(list);
+    }
+
 };
-//ATCDashboard Radar::dashboard;
+vector<Flight*> Radar::flaggedFlights;
+sf::Text Radar::list;
 
 #endif
