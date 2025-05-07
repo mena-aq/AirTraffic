@@ -49,21 +49,6 @@ public:
                 displayFlaggedFlights();
 
                 printf("--AVN DELIVERED--\n");
-                //get back fee info
-                /*
-                fd = open(AVN_FIFO2,O_RDONLY,0666);
-                read(fd,(void*)violation,sizeof(ViolationInfo));
-                close(fd);
-                */
-
-                //write
-                /*
-                AVN avn(violation->flightID,static_cast<AirlineName>(violation->airline),static_cast<AirlineType>(violation->airlineType),violation->speedRecorded,static_cast<FlightPhase>(violation->phaseViolation),violation->violationTimestamp,violation->amountDue);
-                avn.initGraphic(max_Y);
-                AVNs.push_back(avn);
-                printf("recived\n");
-                dashboard.printAVNs();
-                */
 
                 violation[phaseIndex]=true;
             }

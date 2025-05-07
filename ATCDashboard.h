@@ -12,16 +12,21 @@ public:
     float max_Y;
     float max_X;
 
+    pthread_mutex_t lock;
+
     ATCDashboard(){
         this->numViolations=0;
         this->max_Y = 80;
         this->max_X = 10;
+
+        pthread_mutex_init(&lock,NULL);
     }
 
     void addAVN(ViolationInfo* violation){
         float lowerLim = rules[(int)violation->phaseViolation].speedLowerLimit;
         float upperLim = rules[(int)violation->phaseViolation].speedUpperLimit;
-        AVN* avn = new AVN(violation->flightID,static_cast<AirlineName>(violation->airline),static_cast<AirlineType>(violation->airlineType),violation->speedRecorded,static_cast<FlightPhase>(violation->phaseViolation),violation->violationTimestamp,violation->amountDue,lowerLim,upperLim);
+        AVN* avn = new AVN(numViolations,violation->flightID,static_cast<AirlineName>(violation->airline),static_cast<AirlineType>(violation->airlineType),violation->speedRecorded,static_cast<FlightPhase>(violation->phaseViolation),violation->violationTimestamp,violation->amountDue,lowerLim,upperLim);
+        this->numViolations++;
         avn->initGraphic(max_X,max_Y);
         max_Y+= 140;
         AVNs.push_back(avn);
@@ -57,7 +62,27 @@ public:
         }
     }
 
+    AVN* getAVNByID(int id){
+        for (int i=0; i<numViolations; i++){
+            if (AVNs[i]->avnID == id){
+                return AVNs[i];
+                break;
+            }
+        }
+        return nullptr;
+    }
+
     //clear AVN
+    void clearAVNByID(int id){
+        for (int i=0; i<numViolations; i++){
+            if (AVNs[i]->avnID == id){
+                pthread_mutex_lock(&lock);
+                AVNs[i]->status=1;
+                pthread_mutex_unlock(&lock);
+                break;
+            }
+        }
+    }
 
     //graphics
     void displayAVNs(sf::RenderWindow& window){

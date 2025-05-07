@@ -9,6 +9,9 @@
 
 class AVN {
 public:
+
+    int avnID;
+
     int flightID;
     AirlineName airline;
     AirlineType airlineType;
@@ -19,7 +22,7 @@ public:
     time_t violationTimestamp;
     //for AVN generator
     float amountDue;
-    bool status;  // true= paid, false= unpaid
+    int status;  // 0 unpaid, 1 paid, 2 overdue
     time_t dueDate;
 
     sf::RectangleShape graphic;
@@ -28,8 +31,8 @@ public:
 
     AVN () {}
 
-    AVN(int flightID,AirlineName airline,AirlineType airlineType,float speedRecorded,FlightPhase phaseViolation,time_t violationTimestamp,float amountDue,float lowerLim,float upperLim)
-    : flightID(flightID), airline(airline), airlineType(airlineType), speedRecorded(speedRecorded), phaseViolation(phaseViolation),violationTimestamp(violationTimestamp),amountDue(amountDue),dueDate(dueDate){
+    AVN(int avnID,int flightID,AirlineName airline,AirlineType airlineType,float speedRecorded,FlightPhase phaseViolation,time_t violationTimestamp,float amountDue,float lowerLim,float upperLim)
+    : avnID(avnID), flightID(flightID), airline(airline), airlineType(airlineType), speedRecorded(speedRecorded), phaseViolation(phaseViolation),violationTimestamp(violationTimestamp),amountDue(amountDue),status(0),dueDate(dueDate){
 
         //speed allowed
         this->speedAllowedLower = lowerLim;
@@ -57,19 +60,31 @@ public:
         std::cout << "> Due: " << ctime(&dueDate)<<std::endl;
     }
 
+    std::string getStatus(){
+        if(status==0){
+            return "Unpaid";
+        }
+        else if(status==1){
+            return "Paid";
+        }
+        else{
+            return "Overdue";
+        }
+    }
+
     void initGraphic(float x,float y){
         std::ostringstream ss;
-        ss << "AVN CHALLAN\n";
+        ss << "AVN " << this->avnID << std::endl;
         ss << "AVN Issued: Flight " << flightID <<std::endl;
         ss << getAirlineName(airline) << ", " << getAirlineType(airlineType) << std::endl;
         ss << "Speed: " << speedRecorded<<" km/h\n";
         ss << "Phase: " << getPhase(phaseViolation)  << std::endl;
-        //ss << "allows " << speedAllowedLower << " - " << speedAllowedUpper << " kmh\n";
+        ss << "allows " << speedAllowedLower << " - " << speedAllowedUpper << " kmh\n";
         ss << "Timestamp: " << ctime(&violationTimestamp);
         //ss << "Amount: $" << amountDue << std::endl;
         //ss << "Due: " << ctime(&dueDate);
-        ss << "Status: " << (status? "paid":"unpaid");
-    
+        ss << "Status: " << getStatus();
+        
         graphicText.setFont(globalFont);
         graphicText.setFillColor(sf::Color::Black);  
         graphicText.setCharacterSize(13);

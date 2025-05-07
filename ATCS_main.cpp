@@ -146,12 +146,8 @@ public:
     static pthread_t radarTid[TOTAL_FLIGHTS]; //all radar thread ids
     
     //for all simulation flights 
-    //QueueFlights* internationalFlights;
-    //QueueFlights* domesticFlights;
     QueueFlights* upcomingFlights;
     //for those whose arrival time has occured
-    //QueueFlights* internationalWaitingQueue; 
-    //QueueFlights* domesticWaitingQueue;
     QueueFlights* waitingQueue;
     //current
     Flight* currentFlight;

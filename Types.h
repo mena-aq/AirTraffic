@@ -29,6 +29,13 @@ using namespace std;
 #define AVN_FIFO1 "pipes/avnfifo_ATC"
 #define AVN_FIFO2 "pipes/avnfifo_GEN"
 
+#define PAY_FIFO1 "pipes/payfifo_GEN-PORTAL" 
+#define PAY_FIFO2 "pipes/payfifo_STRIP-GEN"
+#define PAY_FIFO3 "pipes/payfifo_GEN-STRIP"
+#define PAY_FIFO4 "pipes/payfifo_PORTAL-STRIP"
+#define PAY_FIFO5 "pipes/payfifo_STRIP-PORTAL"
+#define PAY_FIFO6 "pipes/payfifo_PORTAL-GEN"
+
 
 // ENUMS
 enum AirlineType {

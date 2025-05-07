@@ -182,7 +182,7 @@ public:
         if (this->direction == 'N'){
             sprite.setRotation(180.f);
             this->xPos = 900;
-            this->yPos = -220;                 ///// CHANGE!!!!!!!!!!!!!!!
+            this->yPos = -250;                
             updatePosition();
         }
         else if (this->direction == 'S'){
@@ -871,9 +871,11 @@ public:
     void spriteAltitudeDown() {
         if (altitude > 0 && xPos > 0 && xPos < 1000) {
             float scale = 0.35f - (1 - altitude / 500.f) * (0.35f - 0.25f);  // From 0.35 to 0.25
-            // Ensure the scale doesn't go below 0.25
             if (scale < 0.25f) scale = 0.25f;
-            sprite.setScale(scale, scale);  // Set the scale
+            sprite.setScale(scale, scale); 
+        }
+        if (altitude == 0){
+            sprite.setScale(0.25f,0.25f);
         }
     }
 
