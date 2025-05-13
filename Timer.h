@@ -4,6 +4,14 @@
 class Timer{
 public:
     static int currentTime;
+    sf::Text timerText;
+
+    Timer(){
+        timerText.setFont(globalFont);
+        timerText.setCharacterSize(20);
+        timerText.setFillColor(sf::Color::White);
+        timerText.setPosition(10, 570);
+    }
 
     static void* simulationTimer(void* arg) {
         time_t start = time(nullptr);
@@ -17,6 +25,11 @@ public:
     }
     int getCurrentTime(){
         return currentTime;
+    }
+
+    void drawTimer(sf::RenderWindow& window){
+        timerText.setString("Simulation Time: " + std::to_string(Timer::currentTime) + " / 300s");
+        window.draw(timerText);
     }
 
 };

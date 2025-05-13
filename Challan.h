@@ -3,6 +3,7 @@
 
 #include <ctime>
 #include <chrono>
+#include "Types.h"
 
 struct Challan {
     int avnID;
@@ -36,9 +37,9 @@ struct Challan {
 
     void printChallan(){
         std::cout<<"Flight ID: "<<flightID<<std::endl;
-        std::cout<<"Airline TYpe: "<<airlineType<<std::endl;
-        std::cout<<"amount due: "<<amountDue<<std::endl;
-        std::cout<<"status: ";
+        std::cout<<"Airline Type: "<< getAirlineType(airlineType) <<std::endl;
+        std::cout<<"Amount due: "<<amountDue<<std::endl;
+        std::cout<<"Status: ";
         if(status==0){
             std::cout<<"Unpaid"<<std::endl<<std::endl;
         }

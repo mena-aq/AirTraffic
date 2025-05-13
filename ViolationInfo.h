@@ -22,6 +22,9 @@ struct ViolationInfo {
     : flightID(flightID), airline(airline), airlineType(airlineType), speedRecorded(speedRecorded), phaseViolation(phaseViolation){
         this->violationTimestamp = std::time(nullptr); //save current time
         auto currentTime = std::chrono::system_clock::now();
+        status = 0;
+        amountDue = 0;
+        
     }
 
     void generateFee(){

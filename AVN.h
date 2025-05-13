@@ -81,13 +81,13 @@ public:
         ss << "Phase: " << getPhase(phaseViolation)  << std::endl;
         ss << "allows " << speedAllowedLower << " - " << speedAllowedUpper << " kmh\n";
         ss << "Timestamp: " << ctime(&violationTimestamp);
-        //ss << "Amount: $" << amountDue << std::endl;
-        //ss << "Due: " << ctime(&dueDate);
+        ss << "Amount: $" << amountDue << std::endl;
+        ss << "Due: " << ctime(&dueDate);
         ss << "Status: " << getStatus();
         
         graphicText.setFont(globalFont);
         graphicText.setFillColor(sf::Color::Black);  
-        graphicText.setCharacterSize(13);
+        graphicText.setCharacterSize(11);
         graphicText.setString(ss.str());
 
         //position
@@ -95,6 +95,23 @@ public:
         graphicText.setPosition(x,y);
 
     }
+
+    void refreshGraphic(){
+        std::ostringstream ss;
+        ss << "AVN " << this->avnID << std::endl;
+        ss << "AVN Issued: Flight " << flightID <<std::endl;
+        ss << getAirlineName(airline) << ", " << getAirlineType(airlineType) << std::endl;
+        ss << "Speed: " << speedRecorded<<" km/h\n";
+        ss << "Phase: " << getPhase(phaseViolation)  << std::endl;
+        ss << "allows " << speedAllowedLower << " - " << speedAllowedUpper << " kmh\n";
+        ss << "Timestamp: " << ctime(&violationTimestamp);
+        ss << "Amount: $" << amountDue << std::endl;
+        ss << "Due: " << ctime(&dueDate);
+        ss << "Status: " << getStatus();
+
+        graphicText.setString(ss.str());
+    }
+
     void drawGraphic(sf::RenderWindow& window){
         //printf("draw avn\n");
         window.draw(graphic);

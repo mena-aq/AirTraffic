@@ -25,16 +25,17 @@ using namespace std;
 #define RUNWAY_LEN 0.6
 #define TERMINAL_TO_RUNWAY_LEN 0.045
 
-//FIFO
-#define AVN_FIFO1 "pipes/avnfifo_ATC"
-#define AVN_FIFO2 "pipes/avnfifo_GEN"
 
-#define PAY_FIFO1 "pipes/payfifo_GEN-PORTAL" 
-#define PAY_FIFO2 "pipes/payfifo_STRIP-GEN"
-#define PAY_FIFO3 "pipes/payfifo_GEN-STRIP"
-#define PAY_FIFO4 "pipes/payfifo_PORTAL-STRIP"
-#define PAY_FIFO5 "pipes/payfifo_STRIP-PORTAL"
-#define PAY_FIFO6 "pipes/payfifo_PORTAL-GEN"
+//FIFO
+#define AVN_FIFO1 "pipes/avnfifo_ATC" //gen read violations from atc  --correct
+#define AVN_FIFO2 "pipes/avnfifo_GEN" //gen informs ATC of payment    --correct
+
+#define PAY_FIFO1 "pipes/payfifo_PORTAL" //gen sends admin portal challans   -correct
+#define PAY_FIFO2 "pipes/payfifo_GEN"  //gen reads id from strip to send it challans --correct
+#define PAY_FIFO3 "pipes/payfifo_STRIP"//gen sends challan to pay   --correct
+#define PAY_FIFO4 "pipes/payfifo_PORTAL-GEN" //portal sends airline to gen
+#define PAY_FIFO5 "pipes/payfifo_STRIP-PORTAL" //strip sends confirmation to portal --correct
+#define PAY_FIFO6 "pipes/payfifo_STRIP-GEN"//gen reads id of paid challan from strip to confirm to atc --correct
 
 
 // ENUMS
@@ -72,7 +73,8 @@ enum FlightPhase {
     HOLDING, 
     APPROACH,
     LANDING,
-    DONE
+    DONE,
+    TOWED
 };
 
 void printPhase(FlightPhase phase) {
@@ -136,6 +138,15 @@ std::string getAirlineType(AirlineType airlineType){
         case CARGO: return "CARGO"; break;
         case MEDICAL: return "MEDICAL"; break;
         case MILITARY: return "MILITARY"; break;
+    }
+    return "";
+}
+std::string getAirlineType(int airlineType){
+    switch (airlineType) {
+        case 0: return "COMMERCIAL"; break;
+        case 1: return "CARGO"; break;
+        case 2: return "MEDICAL"; break;
+        case 3: return "MILITARY"; break;
     }
     return "";
 }

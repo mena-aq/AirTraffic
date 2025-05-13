@@ -14,12 +14,6 @@
 
 using namespace std;
 
-#define PAY_FIFO1 "pipes/payfifo_PORTAL"
-#define PAY_FIFO2 "pipes/payfifo_GEN"
-#define PAY_FIFO3 "pipes/payfifo_STRIP"
-#define PAY_FIFO4 "pipes/payfifo_PORTAL-STRIP"
-#define PAY_FIFO5 "pipes/payfifo_STRIP-PORTAL"
-
 int main(){
 
     int fd=-1;
@@ -36,12 +30,12 @@ int main(){
         close(fd);
         
         //receuve challan
-        Challan* challan = new Challan;
+        Challan challan;;
         fd = open(PAY_FIFO3,O_RDONLY);
-        read(fd,(void*)challan,sizeof(Challan));
+        read(fd,(void*)&challan,sizeof(Challan));
         close(fd);
 
-        if (challan->avnID==-1){
+        if (challan.avnID==-1){
             cout << "Invalid AVN! Retry\n";
         }
         else{
@@ -49,8 +43,8 @@ int main(){
             int amount;
             std::cout<<"Enter payment amount: ";
             cin>>amount;
-            while(amount< challan->amountDue || challan->amountDue< amount){
-                if(amount< challan->amountDue){
+            while(amount< challan.amountDue || challan.amountDue< amount){
+                if(amount< challan.amountDue){
                     cout<<"The amount you entered is insufficient to clear the fee! Kindly enter again: ";
                     cin>> amount;
                 }
@@ -60,27 +54,22 @@ int main(){
                 }
             }
 
-            challan->CalculatePayment(amount);
+            challan.CalculatePayment(amount);
             //challan->printChallan();
 
-            //send confirmation back to PORTal
-            fd=open(PAY_FIFO5, O_WRONLY);
-            write(fd, (void*)challan, sizeof(Challan));
-            close(fd);
-
             //send clearance back to generator
-            int avnID = challan->avnID;
-            fd = open(PAY_FIFO2,O_WRONLY);
-            read(fd,&avnID,sizeof(avnID));
+            int flightID = challan.flightID;
+            fd = open(PAY_FIFO6,O_WRONLY);
+            write(fd,&flightID,sizeof(flightID));
             close(fd);
-            
+            cout<<"sent clearance id to gen: "<<flightID<<endl;
 
-            free(challan);
-        }
+            fd=open(PAY_FIFO5, O_WRONLY);
+            write(fd, (void*)&challan, sizeof(Challan));
+            close(fd);
 
-                    
-                    
 
-                    
+           // delete challan;
+        }           
     }
 }

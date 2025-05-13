@@ -10,16 +10,13 @@ using namespace std;
 #include "Challan.h"
 #include "Types.h"
 
-#define PAY_FIFO1 "pipes/payfifo_PORTAL"
-#define PAY_FIFO2 "pipes/payfifo_GEN"
-#define PAY_FIFO3 "pipes/payfifo_STRIP"
-#define PAY_FIFO4 "pipes/payfifo_PORTAL-STRIP"
-#define PAY_FIFO5 "pipes/payfifo_STRIP-PORTAL"
-
 vector<Challan> challanList;
 vector<Challan> history;
 
 pthread_mutex_t challanMutex = PTHREAD_MUTEX_INITIALIZER;
+
+int airline = -1;
+bool running = true;
 
 
 //to print all challans
@@ -52,64 +49,9 @@ void viewHistory() {
     pthread_mutex_unlock(&challanMutex);
 }
 
-
-void* updateChallan(void* arg) {
-    int fd = -1;
-
-    while (1) {
-        Challan* challan = new Challan;
-
-        //wait and read confirmation from strip pay
-        fd = open(PAY_FIFO4, O_RDONLY);
-        read(fd, (void*)challan, sizeof(Challan));
-        close(fd);
-
-        pthread_mutex_lock(&challanMutex);
-
-        cout << "Challan Confirmation received from stripe pay:\n";
-
-        bool found = false;
-        //finds that challan in the list and updates it
-        //viewActive();
-        //viewHistory();
-        for (int i = 0; i < challanList.size(); i++) {
-            if (challanList[i].flightID == challan->flightID && challanList[i].status == 0) {
-                found = true;
-
-                challanList[i].status = challan->status;
-                challanList[i].amountDue = challan->amountDue;
-
-                if (challanList[i].amountDue <= 0) {
-                    //if challan fully paid, add it to history and remove from list
-                    Challan newChallan = challanList[i];
-
-                    //update status to paid;
-                     newChallan.status=1;
-
-                    history.push_back(newChallan);
-                    challanList.erase(challanList.begin() + i);
-                    cout << "Updated challan:\n";
-                    newChallan.printChallan();
-                }
-                else{
-                    cout << "Updated challan:\n";
-                    challanList[i].printChallan();
-                }
-                break;
-            }
-        }
-
-        pthread_mutex_unlock(&challanMutex);
-
-        free(challan);
-    }
-
-    pthread_exit(NULL);
-}
-
 void receiveChallan(int airline) {   
     //send airline
-    int fd = open(PAY_FIFO3,O_WRONLY);
+    int fd = open(PAY_FIFO4,O_WRONLY);
     write(fd,(void*)&airline,sizeof(airline));;
     close(fd);
     
@@ -128,10 +70,11 @@ void receiveChallan(int airline) {
         cout << "New Challan received:\n";
         challan->printChallan();
     }
+    if (challanList.empty() && history.empty())
+        cout << "no challans received\n";
     close(fd);
     delete challan;
 
-    pthread_exit(NULL);
 }
 
 
@@ -152,44 +95,86 @@ int inputAirline(){
         cout<<"Invalid airline!\n Enter again: ";
         cin>>airline;
     }
-    return airline;
+    return airline-1;
 }
 
 int main() {
-
     pthread_mutex_init(&challanMutex,NULL);
 
-    int airline = inputAirline();
+    airline = inputAirline();
 
     //eveytime the process starts read from geerator all relavant challans
     receiveChallan(airline); //read once 
 
-    //thread to update a challan when confirmation is recieved
-    pthread_t updateChallanTID;
-    //(void*)&airline    
-    pthread_create(&updateChallanTID, NULL, updateChallan, NULL);
-        
-    int op;
-    while (1){
-        
+    int fd = -1;
+
+    while (running) {
+        printf("Waiting for updates...\n");
+        sleep(5);
+
+        Challan* challan = new Challan;
+
+        //wait and read confirmation from strip pay
+        fd = open(PAY_FIFO5, O_RDONLY);
+        int b = read(fd, (void*)challan, sizeof(Challan));
+        close(fd);
+
+
+        if (b>0){
+            cout << "\n\n UPDATE!\nChallan Confirmation received from stripe pay:\n";
+
+            bool found = false;
+            //finds that challan in the list and updates it
+            //viewActive();
+            //viewHistory();
+            for (int i = 0; i < challanList.size(); i++) {
+                if (challanList[i].flightID == challan->flightID && challanList[i].status == 0) {
+                    found = true;
+
+                    challanList[i].status = challan->status;
+                    challanList[i].amountDue = challan->amountDue;
+
+                    if (challanList[i].amountDue <= 0) {
+                        //if challan fully paid, add it to history and remove from list
+                        Challan newChallan = challanList[i];
+
+                        //update status to paid;
+                        newChallan.status=1;
+
+                        history.push_back(newChallan);
+                        challanList.erase(challanList.begin() + i);
+                        cout << "Updated challan:\n";
+                        newChallan.printChallan();
+                    }
+                    else{
+                        cout << "Updated challan:\n";
+                        challanList[i].printChallan();
+                    }
+                    break;
+                }
+            }
+        }
+        else 
+            printf("No challans cleared yet\n");
         cout << "\n\n > Refresh? : 1\n";
         cout << "> LogOut? : 2\n";
+        int op;
         cin >> op;
         if (op == 1){
             pthread_mutex_lock(&challanMutex);
             challanList.clear();
             history.clear();
             pthread_mutex_unlock(&challanMutex);
+            cout << "refreshing...\n";
+            sleep(1);
             receiveChallan(airline);
         }
-        else if (op==2){
-            break;
+        else if (op == 2){
+            running = false;
         }
+
+        free(challan);
     }
-    
-    cout << "logging out...";
-    sleep(1);
-    pthread_join(updateChallanTID, NULL);
 
     return 0;
 }

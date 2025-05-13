@@ -9,7 +9,6 @@
 bool flightTurn[TOTAL_FLIGHTS]={false};
 pthread_cond_t flightCond[TOTAL_FLIGHTS];
 
-
 //make the 3 runways
 Runway rwyA('A'); 
 Runway rwyB('B'); 
@@ -36,12 +35,11 @@ void* simulateWaitingAtGate(void* arg){
         //flight will wait at gate stationary until runway clears
         //if any fault, just tow and remove from queue
         while (!flightTurn[(flight->id)-1]){
-            /*
             if (flight->checkFaults()){//if faulty remove
                 flight->faulty = true;
+                flight->phase = FlightPhase::TOWED;
                 pthread_exit(NULL);
             }
-            */
             flight->waitingTime++;
             sleep(1);
             if (int(flight->waitingTime)%100 == 0)
@@ -198,7 +196,7 @@ public:
         int currentFlightID = -1;
 
         // START AIR TRAFFIC CONTROL OF ALL FLIGHTS BY FCFS/PRIORITY
-        while (!upcomingFlights->isEmpty() || !waitingQueue->isEmpty() || Timer::currentTime < SIMULATION_DURATION) {
+        while ((!upcomingFlights->isEmpty() || !waitingQueue->isEmpty()) && Timer::currentTime < SIMULATION_DURATION) {
 
             //rwyC handle any reroutes
             if (dispatcher->runway=='C'){
@@ -238,6 +236,9 @@ public:
             waitingQueue->sortQueue();
 
             Flight* nextFlight = waitingQueue->getNextFlight();
+            while (nextFlight && nextFlight->phase == FlightPhase::TOWED){
+                nextFlight = waitingQueue->getNextFlight();
+            }
 
             // check if anyone currently running do we pre-empt
             if (nextFlight != nullptr) {
@@ -324,7 +325,6 @@ public:
                 flightPanel.removeCardById(dispatcher->currentFlight->id); //remove card from panel
                 currentFlightID = -1;
                 finishedFlights.push_back(dispatcher->currentFlight); //add to completed/out of airspace flights
-                //free(dispatcher->currentFlight);
                 dispatcher->currentFlight = nullptr;
                 //printf("unset turn");
             }
@@ -373,6 +373,7 @@ FlightType getFlightType(char dir){
         dir = toupper(dir);          // normalize again
     }
 
+
     if (dir == 'N') return FlightType::INTERNATIONAL_ARRIVAL;
     if (dir == 'E') return FlightType::INTERNATIONAL_DEPARTURE;
     if (dir == 'S') return FlightType::DOMESTIC_ARRIVAL;
@@ -413,7 +414,7 @@ AirlineType getAirtype(int type){
 }
 
 int checkTime(float time){
-    while(time <0.00 || time >=24.00){
+    while(time <0|| time >=300){
         cout<<"Invalid Time!\nEnter again: ";
         cin>> time;
     }
@@ -427,15 +428,13 @@ int main() {
     srand(time(NULL));
     loadFont();
 
+
     // INPUT FLIGHTS
     QueueFlights* rwyAFlights = new QueueFlights;
-    //QueueFlights* rwyADomesticFlights = new QueueFlights;
 
     QueueFlights* rwyBFlights = new QueueFlights;
-    //QueueFlights* rwyBDomesticFlights = new QueueFlights;
 
     QueueFlights* rwyCFlights = new QueueFlights;
-    //QueueFlights* rwyCDomesticFlights = new QueueFlights;
 
     //make dispatchers for 3 runways (A is for arrival, B for departure and C for cargo (dept and arr))
     Dispatcher rwyADispatcher('A',rwyAFlights);
@@ -466,6 +465,12 @@ int main() {
     cout<<"3)CARGO\n";
     cout<<"4)COMMERCIAL\n\n";
 
+    cout<<"==================================================\n";
+    cout<<"N -> international arrival\n";
+    cout<<"S -> domestic arrival\n";
+    cout<<"E -> international departure\n";
+    cout<<"W -> domestic departure\n\n";
+
     printf("Enter data for %d flights\n\n", TOTAL_FLIGHTS);
 
     FlightType Ftype; AirlineType airtype; AirlineName name;
@@ -489,27 +494,17 @@ int main() {
         f= new Flight(id, Ftype, airtype, name, scheduledTime, dir);
 
         if(airtype == AirlineType:: CARGO){
-            if(Ftype== INTERNATIONAL_ARRIVAL || Ftype== INTERNATIONAL_DEPARTURE)
-                rwyCDispatcher.internationalFlights->addFlight(f);
-            else
-                rwyCDispatcher.domesticFlights->addFlight(f);
+            rwyCDispatcher.upcomingFlights->addFlight(f);
         }
         else if(f->isArrival()){
-            if(Ftype== INTERNATIONAL_ARRIVAL)
-                rwyADispatcher.internationalFlights->addFlight(f);
-            else
-                rwyADispatcher.domesticFlights->addFlight(f);
+            rwyADispatcher.upcomingFlights->addFlight(f);
         }
         else if(f->isDeparture()){
-           if(Ftype== INTERNATIONAL_DEPARTURE)
-                rwyBDispatcher.internationalFlights->addFlight(f);
-            else
-                rwyBDispatcher.domesticFlights->addFlight(f);
+            rwyBDispatcher.upcomingFlights->addFlight(f);
         }
         f->printStatus();
     }
 */
-
 
     pthread_t dispatcherA;
     pthread_t dispatcherB;
@@ -517,6 +512,9 @@ int main() {
 
     Timer timer;
     pthread_t timerThread;
+
+    Radar radar;
+
 
     Flight* f1 = new Flight(1, FlightType:: INTERNATIONAL_ARRIVAL, AirlineType:: COMMERCIAL, AirlineName:: PIA,1.0,'N');
     Flight* f2 = new Flight(2, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: MILITARY, AirlineName::Pakistan_Airforce,16,'S');
@@ -529,16 +527,20 @@ int main() {
     rwyBDispatcher.upcomingFlights->addFlight(f3);
 
     Flight* f5 = new Flight(5, FlightType:: DOMESTIC_ARRIVAL, AirlineType:: CARGO, AirlineName:: FedEx,1,'E');
-    //Flight* f6 = new Flight(6, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: CARGO, AirlineName:: Blue_Dart);
+    Flight* f6 = new Flight(6, FlightType:: INTERNATIONAL_DEPARTURE, AirlineType:: CARGO, AirlineName:: Blue_Dart,30,'E');
     rwyCDispatcher.upcomingFlights->addFlight(f5);
-    //rwyCDispatcher.internationalFlights->addFlight(f6);
+    rwyCDispatcher.upcomingFlights->addFlight(f6);
 
     pthread_create(&dispatcherA, nullptr, Dispatcher::dispatchFlights, (void*)&rwyADispatcher);   
     pthread_create(&dispatcherB, nullptr, Dispatcher::dispatchFlights, (void*)&rwyBDispatcher);
     pthread_create(&dispatcherC, nullptr, Dispatcher::dispatchFlights, (void*)&rwyCDispatcher);
 
+
     sleep(1);
     pthread_create(&timerThread,NULL,timer.simulationTimer,NULL);
+
+    pthread_t v;
+    pthread_create(&v,NULL,radar.clearFlightViolations,NULL);
 
     //start graphics window
     sf::RenderWindow window(sf::VideoMode(960, 600), "ATCS");
@@ -562,13 +564,15 @@ int main() {
         rwyADispatcher.drawFlights(&rwyADispatcher,window);
         rwyBDispatcher.drawFlights(&rwyBDispatcher,window);
         rwyCDispatcher.drawFlights(&rwyCDispatcher,window);
+        timer.drawTimer(window);
         window.display();
     }
 
 
     pthread_join(dispatcherA, NULL);
     pthread_join(dispatcherB, NULL);
-    //pthread_join(dispatcherC, NULL);
+    pthread_join(dispatcherC, NULL);
     pthread_join(timerThread, NULL);
+    pthread_cancel(v);
     return 0;
 }
