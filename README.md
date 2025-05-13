@@ -6,22 +6,10 @@
 
 ---
 ### Flight Phases
-- Holding            
-- Approach
-- Landing
-- Taxi
-- Gate
-- Takeoff
-- Climb
-- Cruise
+- Holding, Approach, Landing, Taxi, Gate, Takeoff, Climb, Cruise
 
 ### Airlines
-- PIA
-- AirBlue
-- FedX
-- Pakistan Airforce
-- Blue Dart
-- Agha Khan Air Ambulance
+- PIA, AirBlue, FedX, Pakistan Airforce, Blue Dart, Agha Khan Air Ambulance
 
 ### Airline Types
 *From highest to lowest priority*
@@ -90,12 +78,13 @@ Our project employs **4** unique process that communicate through **named pipes*
 ## Simulation Output
 This is a simulation with 5 input flights.
 
+### ATCS Interface
 ![interface](assets/interface.png)
 
-![generator](assets/generator.png)
-
+### Airline Portal
 ![portal](assets/Portal.png)
 
+### StripePay
 ![stripepay](assets/StripPay.png)
 
 ---
